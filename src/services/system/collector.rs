@@ -123,7 +123,7 @@ fn top_open_files_process(processes: &mut [ProcessInfo]) -> Option<&ProcessInfo>
 }
 
 fn processes_then_threads(processes: &mut [ProcessInfo]) {
-    processes.sort_unstable_by_key(|p| (p.is_thread, !p.open_files.is_some()));
+    processes.sort_unstable_by_key(|p| (p.is_thread, p.open_files.is_none()));
 }
 
 fn process_to_values(process: &ProcessInfo, users: &Users) -> Vec<(String, Datavalue)> {
