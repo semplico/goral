@@ -6,6 +6,15 @@ use crate::messenger::configuration::MessengerConfig;
 use serde_derive::Deserialize;
 use serde_valid::Validate;
 
+pub(super) fn scrape_push_rule_validate(
+    scrape_timeout_ms: &u32,
+    scrape_interval_secs: &u16,
+    push_interval_secs: &u16,
+) -> Result<(), serde_valid::validation::Error> {
+    scrape_push_rule(scrape_timeout_ms, scrape_interval_secs, push_interval_secs)?;
+    Ok(())
+}
+
 pub(super) fn scrape_push_rule(
     scrape_timeout_ms: &u32,
     scrape_interval_secs: &u16,
@@ -57,7 +66,7 @@ fn scrape_timeout_ms() -> u32 {
     3000
 }
 
-pub(crate) fn push_interval_secs() -> u16 {
+pub fn push_interval_secs() -> u16 {
     20
 }
 
@@ -75,30 +84,30 @@ fn autotruncate_at_usage_percent() -> f32 {
 
 #[derive(Debug, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
-#[rule(scrape_timeout_interval_rule(scrape_interval_secs, scrape_timeout_ms))]
-#[rule(scrape_push_rule(scrape_timeout_ms, scrape_interval_secs, push_interval_secs))]
+#[validate(custom = |s| scrape_timeout_interval_rule(&s.scrape_interval_secs, &s.scrape_timeout_ms))]
+#[validate(custom = |s| scrape_push_rule_validate(&s.scrape_timeout_ms, &s.scrape_interval_secs, &s.push_interval_secs))]
 #[allow(unused)]
-pub(crate) struct System {
-    pub(crate) spreadsheet_id: String,
+pub struct System {
+    pub spreadsheet_id: String,
     #[validate]
-    pub(crate) messenger: Option<MessengerConfig>,
+    pub messenger: Option<MessengerConfig>,
     #[validate(minimum = 10)]
     #[serde(default = "push_interval_secs")]
-    pub(crate) push_interval_secs: u16,
+    pub push_interval_secs: u16,
     #[validate(minimum = 1)]
     #[serde(default = "scrape_interval_secs")]
-    pub(crate) scrape_interval_secs: u16,
+    pub scrape_interval_secs: u16,
     #[validate(minimum = 1)]
     #[serde(default = "scrape_timeout_ms")]
-    pub(crate) scrape_timeout_ms: u32,
+    pub scrape_timeout_ms: u32,
     #[serde(default = "mounts")]
-    pub(crate) mounts: Vec<String>,
+    pub mounts: Vec<String>,
     #[serde(default = "process_names")]
-    pub(crate) process_names: Vec<String>,
+    pub process_names: Vec<String>,
     #[serde(default = "autotruncate_at_usage_percent")]
     #[validate(minimum = 0.0)]
     #[validate(maximum = 100.0)]
-    pub(crate) autotruncate_at_usage_percent: f32,
+    pub autotruncate_at_usage_percent: f32,
 }
 
 #[cfg(test)]

@@ -15,7 +15,7 @@ const THOUSAND: u64 = 10_u64.pow(3);
 const MILLION: u64 = 10_u64.pow(6);
 const BILLION: u64 = 10_u64.pow(9);
 const TRILLION: u64 = 10_u64.pow(12);
-pub(crate) const NOT_AVAILABLE: &str = "N/A";
+pub const NOT_AVAILABLE: &str = "N/A";
 
 const fn size_pattern(size: u64) -> &'static str {
     if size >= TRILLION {
@@ -32,7 +32,7 @@ const fn size_pattern(size: u64) -> &'static str {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Datavalue {
+pub enum Datavalue {
     Text(String),
     RedText(String),
     OrangeText(String),
@@ -54,16 +54,12 @@ pub(crate) enum Datavalue {
 pub struct Datarow {
     log_name: String,
     timestamp: NaiveDateTime,
-    pub(crate) data: Vec<(String, Datavalue)>,
+    pub data: Vec<(String, Datavalue)>,
     sheet_id: Option<SheetId>,
 }
 
 impl Datarow {
-    pub(crate) fn new(
-        log_name: String,
-        timestamp: NaiveDateTime,
-        data: Vec<(String, Datavalue)>,
-    ) -> Self {
+    pub fn new(log_name: String, timestamp: NaiveDateTime, data: Vec<(String, Datavalue)>) -> Self {
         Self {
             log_name,
             timestamp,
@@ -72,7 +68,7 @@ impl Datarow {
         }
     }
 
-    pub(crate) fn sheet_id(&mut self, host_id: &str, service_name: &str) -> SheetId {
+    pub fn sheet_id(&mut self, host_id: &str, service_name: &str) -> SheetId {
         if let Some(sheet_id) = self.sheet_id {
             return sheet_id;
         }
@@ -83,7 +79,7 @@ impl Datarow {
         sheet_id
     }
 
-    pub(crate) fn keys(&self) -> Vec<&str> {
+    pub fn keys(&self) -> Vec<&str> {
         let mut keys = Vec::with_capacity(self.data.len() + 1);
         keys.push(DATETIME_COLUMN_NAME);
         for (k, _) in self.data.iter() {
@@ -92,7 +88,7 @@ impl Datarow {
         keys
     }
 
-    pub(crate) fn keys_sorted(&self) -> Vec<&str> {
+    pub fn keys_sorted(&self) -> Vec<&str> {
         let mut keys = Vec::with_capacity(self.data.len() + 1);
         keys.push(DATETIME_COLUMN_NAME);
         for (k, _) in self.data.iter() {
@@ -102,7 +98,7 @@ impl Datarow {
         keys
     }
 
-    pub(crate) fn headers(&self) -> Vec<Header> {
+    pub fn headers(&self) -> Vec<Header> {
         let mut headers = Vec::with_capacity(self.data.len() + 1);
         headers.push(Header::new(DATETIME_COLUMN_NAME.to_string(), None));
         for (k, _) in self.data.iter() {
@@ -111,7 +107,7 @@ impl Datarow {
         headers
     }
 
-    pub(crate) fn sort_by_keys(&mut self, keys: &[String]) {
+    pub fn sort_by_keys(&mut self, keys: &[String]) {
         let cap = self.data.len();
         let mut data: HashMap<String, Datavalue> =
             mem::replace(&mut self.data, Vec::with_capacity(cap))
@@ -126,7 +122,7 @@ impl Datarow {
         }
     }
 
-    pub(crate) fn values(self) -> Vec<Datavalue> {
+    pub fn values(self) -> Vec<Datavalue> {
         let mut values = Vec::with_capacity(self.data.len() + 1);
         values.push(Datavalue::Datetime(self.timestamp));
         for (_, v) in self.data.into_iter() {
@@ -135,7 +131,7 @@ impl Datarow {
         values
     }
 
-    pub(crate) fn log_name(&self) -> &String {
+    pub fn log_name(&self) -> &String {
         &self.log_name
     }
 }
@@ -458,7 +454,7 @@ mod tests {
     use super::*;
 
     impl Datarow {
-        pub(crate) fn keys_values(&self) -> HashMap<String, Datavalue> {
+        pub fn keys_values(&self) -> HashMap<String, Datavalue> {
             self.data.clone().into_iter().collect()
         }
     }

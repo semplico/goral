@@ -18,7 +18,7 @@ use url::{Host, Url};
 pub const APP_NAME: &str = "GORAL";
 pub const GOOGLE_SHEET_BASE: &str = "https://docs.google.com/spreadsheets/d/";
 
-pub(crate) fn ceiled_division(divisable: u16, divisor: u16) -> u16 {
+pub fn ceiled_division(divisable: u16, divisor: u16) -> u16 {
     let quotient = divisable / divisor;
     let remainder = divisable % divisor;
     if remainder == 0 {
@@ -28,7 +28,7 @@ pub(crate) fn ceiled_division(divisable: u16, divisor: u16) -> u16 {
     }
 }
 
-pub(crate) fn scrape_timeout_interval_rule(
+pub fn scrape_timeout_interval_rule(
     scrape_interval_secs: &u16,
     scrape_timeout_ms: &u32,
 ) -> Result<(), serde_valid::validation::Error> {
@@ -41,15 +41,15 @@ pub(crate) fn scrape_timeout_interval_rule(
     Ok(())
 }
 
-pub(crate) fn scrape_interval_secs() -> u16 {
+pub fn scrape_interval_secs() -> u16 {
     10
 }
 
-pub(crate) fn push_interval_secs() -> u16 {
+pub fn push_interval_secs() -> u16 {
     30
 }
 
-pub(crate) fn host_validation(url: &Url) -> Result<(), serde_valid::validation::Error> {
+pub fn host_validation(url: &Url) -> Result<(), serde_valid::validation::Error> {
     url.host()
         .map(|_| ())
         .ok_or(serde_valid::validation::Error::Custom(format!(
@@ -58,7 +58,7 @@ pub(crate) fn host_validation(url: &Url) -> Result<(), serde_valid::validation::
         )))
 }
 
-pub(crate) fn port_validation(url: &Url) -> Result<(), serde_valid::validation::Error> {
+pub fn port_validation(url: &Url) -> Result<(), serde_valid::validation::Error> {
     match url.host() {
         Some(Host::Domain(domain)) if !domain.starts_with("localhost") => Ok(()),
         _ => url
@@ -71,7 +71,7 @@ pub(crate) fn port_validation(url: &Url) -> Result<(), serde_valid::validation::
     }
 }
 
-pub(crate) fn log_name(name: &str) -> Result<(), serde_valid::validation::Error> {
+pub fn log_name(name: &str) -> Result<(), serde_valid::validation::Error> {
     const REGEX: &str = r"^[^@]+$";
     lazy_static! {
         static ref RE: Regex =
@@ -85,7 +85,7 @@ pub(crate) fn log_name(name: &str) -> Result<(), serde_valid::validation::Error>
     Ok(())
 }
 
-pub(crate) fn log_name_opt(name: &Option<String>) -> Result<(), serde_valid::validation::Error> {
+pub fn log_name_opt(name: &Option<String>) -> Result<(), serde_valid::validation::Error> {
     if let Some(name) = name {
         log_name(name)
     } else {
@@ -93,7 +93,7 @@ pub(crate) fn log_name_opt(name: &Option<String>) -> Result<(), serde_valid::val
     }
 }
 
-pub(crate) fn case_insensitive_enum<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+pub fn case_insensitive_enum<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
     T: FromStr,
@@ -109,15 +109,15 @@ pub struct Configuration {
     #[validate]
     pub general: General,
     #[validate]
-    pub(crate) healthcheck: Option<Healthcheck>,
+    pub healthcheck: Option<Healthcheck>,
     #[validate]
-    pub(crate) kv: Option<Kv>,
+    pub kv: Option<Kv>,
     #[validate]
-    pub(crate) logs: Option<Logs>,
+    pub logs: Option<Logs>,
     #[validate]
-    pub(crate) metrics: Option<Metrics>,
+    pub metrics: Option<Metrics>,
     #[validate]
-    pub(crate) system: Option<System>,
+    pub system: Option<System>,
 }
 
 impl Configuration {
@@ -184,13 +184,13 @@ impl Configuration {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+pub mod tests {
     use super::*;
     use config::FileFormat;
     use std::str::FromStr;
     use url::Url;
 
-    pub(crate) fn build_config<T: for<'a> Deserialize<'a> + Validate>(
+    pub fn build_config<T: for<'a> Deserialize<'a> + Validate>(
         contents: &str,
     ) -> Result<T, ConfigError> {
         let s = Config::builder()

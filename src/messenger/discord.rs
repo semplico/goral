@@ -1,40 +1,26 @@
+use crate::http::HttpClient;
 use crate::messenger::configuration::MessengerConfig;
 use crate::messenger::Messenger;
-use crate::HttpsClient;
 use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
-use hyper::{Body, Method, Request};
 use serde_derive::Serialize;
 
-pub(crate) struct Discord {
-    client: HttpsClient,
+pub struct Discord {
+    client: HttpClient,
 }
 
 impl Discord {
-    pub(crate) fn new() -> Self {
-        let client: HttpsClient = hyper::Client::builder().build(
-            hyper_rustls::HttpsConnectorBuilder::new()
-                .with_native_roots()
-                .expect("assert: can build discord client with native root certs")
-                .https_only()
-                .enable_http1()
-                .build(),
-        );
+    pub fn new(client: HttpClient) -> Self {
         Self { client }
     }
 
     async fn send_message(&self, config: &MessengerConfig, markdown: &str) -> Result<()> {
         let mut url = config.url.clone();
         url.query_pairs_mut().clear();
+        let url = url.as_str().parse()?;
         let body = DiscordRequestBody::new(markdown);
-        let req = Request::builder()
-            .method(Method::POST)
-            .uri(url.as_str())
-            .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_string(&body)?))?;
-        tracing::debug!("{:?}", req);
-        let resp = self.client.request(req).await?;
+        let (_, resp) = self.client.post_json(url, vec![], &body).await?;
         tracing::debug!("{:?}", resp);
         if resp.status() != 204 {
             tracing::error!("discord error response {:?}", resp);

@@ -16,20 +16,20 @@ use std::hash::Hasher;
 use std::mem;
 use std::str::FromStr;
 
-pub(crate) type SheetId = i32;
-pub(crate) type TabColorRGB = (f32, f32, f32);
+pub type SheetId = i32;
+pub type TabColorRGB = (f32, f32, f32);
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum SheetType {
+pub enum SheetType {
     Grid,
     Chart,
     Other,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Dropdown {
-    pub(crate) values: Vec<String>,
-    pub(crate) column_index: u16,
+pub struct Dropdown {
+    pub values: Vec<String>,
+    pub column_index: u16,
 }
 
 impl From<String> for SheetType {
@@ -53,13 +53,13 @@ impl fmt::Display for SheetType {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct Header {
+pub struct Header {
     title: String,
     note: Option<String>,
 }
 
 impl Header {
-    pub(crate) fn new(title: String, note: Option<String>) -> Self {
+    pub fn new(title: String, note: Option<String>) -> Self {
         Self { title, note }
     }
 }
@@ -112,7 +112,7 @@ impl From<Header> for CellData {
 }
 
 #[derive(Debug)]
-pub(crate) struct Sheet {
+pub struct Sheet {
     pub(super) sheet_id: SheetId,
     pub(super) title: String,
     pub(super) hidden: bool,
@@ -128,23 +128,23 @@ pub(crate) struct Sheet {
 }
 
 impl Sheet {
-    pub(crate) fn meta_value(&self, key: &str) -> Option<&String> {
+    pub fn meta_value(&self, key: &str) -> Option<&String> {
         self.metadata.get(key)
     }
 
-    pub(crate) fn sheet_id(&self) -> SheetId {
+    pub fn sheet_id(&self) -> SheetId {
         self.sheet_id
     }
 
-    pub(crate) fn sheet_type(&self) -> SheetType {
+    pub fn sheet_type(&self) -> SheetType {
         self.sheet_type.clone()
     }
 
-    pub(crate) fn row_count(&self) -> Option<i32> {
+    pub fn row_count(&self) -> Option<i32> {
         self.row_count
     }
 
-    pub(crate) fn column_count(&self) -> Option<i32> {
+    pub fn column_count(&self) -> Option<i32> {
         self.column_count
     }
 }
@@ -222,7 +222,7 @@ impl From<GoogleSheet> for Sheet {
 }
 
 #[derive(Debug)]
-pub(crate) struct VirtualSheet {
+pub struct VirtualSheet {
     pub(super) sheet: Sheet,
     pub(super) headers: Vec<Header>,
     pub(super) dropdowns: Vec<Dropdown>,
@@ -361,7 +361,7 @@ impl VirtualSheet {
         requests
     }
 
-    pub(crate) fn new_grid(
+    pub fn new_grid(
         sheet_id: SheetId,
         title: String,
         headers: Vec<Header>,
@@ -408,28 +408,28 @@ impl VirtualSheet {
         }
     }
 
-    pub(crate) fn with_dropdowns(mut self, dropdowns: Vec<Dropdown>) -> Self {
+    pub fn with_dropdowns(mut self, dropdowns: Vec<Dropdown>) -> Self {
         self.dropdowns = dropdowns;
         self
     }
 
-    pub(crate) fn metadata_mut(&mut self) -> &mut Metadata {
+    pub fn metadata_mut(&mut self) -> &mut Metadata {
         &mut self.sheet.metadata
     }
 
-    pub(crate) fn sheet_id(&self) -> SheetId {
+    pub fn sheet_id(&self) -> SheetId {
         self.sheet.sheet_id()
     }
 
-    pub(crate) fn row_count(&self) -> Option<i32> {
+    pub fn row_count(&self) -> Option<i32> {
         self.sheet.row_count()
     }
 
-    pub(crate) fn sheet_type(&self) -> SheetType {
+    pub fn sheet_type(&self) -> SheetType {
         self.sheet.sheet_type()
     }
 
-    pub(crate) fn sheet(&self) -> &Sheet {
+    pub fn sheet(&self) -> &Sheet {
         &self.sheet
     }
 }
@@ -443,7 +443,7 @@ impl VirtualSheet {
 // For 50 sheets to be created in the same workbook this probability
 // is approximately 10^-6 which is acceptable for our purposes
 // See also the test below
-pub(crate) fn str_to_id(s: &str) -> i32 {
+pub fn str_to_id(s: &str) -> i32 {
     let mut hasher = DefaultHasher::new();
     hasher.write(s.as_bytes());
     let bytes = hasher.finish().to_be_bytes();
@@ -460,21 +460,21 @@ fn generate_metadata_id(key: &str, sheet_id: SheetId) -> i32 {
 }
 
 #[derive(Debug)]
-pub(crate) struct UpdateSheet {
+pub struct UpdateSheet {
     sheet_id: SheetId,
     metadata: Metadata,
 }
 
 impl UpdateSheet {
-    pub(crate) fn new(sheet_id: SheetId, metadata: Metadata) -> Self {
+    pub fn new(sheet_id: SheetId, metadata: Metadata) -> Self {
         Self { sheet_id, metadata }
     }
 
-    pub(crate) fn sheet_id(&self) -> SheetId {
+    pub fn sheet_id(&self) -> SheetId {
         self.sheet_id
     }
 
-    pub(crate) fn metadata_mut(&mut self) -> &mut Metadata {
+    pub fn metadata_mut(&mut self) -> &mut Metadata {
         &mut self.metadata
     }
 
@@ -508,17 +508,17 @@ impl UpdateSheet {
 }
 
 #[derive(Debug)]
-pub(crate) enum CleanupSheet {
+pub enum CleanupSheet {
     Delete { sheet_id: SheetId },
     Truncate { sheet_id: SheetId, rows: i32 },
 }
 
 impl CleanupSheet {
-    pub(crate) fn delete(sheet_id: SheetId) -> Self {
+    pub fn delete(sheet_id: SheetId) -> Self {
         Self::Delete { sheet_id }
     }
 
-    pub(crate) fn truncate(sheet_id: SheetId, rows: i32) -> Self {
+    pub fn truncate(sheet_id: SheetId, rows: i32) -> Self {
         Self::Truncate { sheet_id, rows }
     }
 
@@ -547,14 +547,14 @@ impl CleanupSheet {
 }
 
 #[derive(Debug)]
-pub(crate) struct Rows {
+pub struct Rows {
     sheet_id: SheetId,
     row_count: i32,
     rows: Vec<RowData>,
 }
 
 impl Rows {
-    pub(crate) fn new(sheet_id: SheetId, row_count: i32) -> Self {
+    pub fn new(sheet_id: SheetId, row_count: i32) -> Self {
         Self {
             sheet_id,
             row_count,
@@ -562,11 +562,11 @@ impl Rows {
         }
     }
 
-    pub(crate) fn push(&mut self, row: RowData) {
+    pub fn push(&mut self, row: RowData) {
         self.rows.push(row)
     }
 
-    pub(crate) fn new_rows_count(&self) -> i32 {
+    pub fn new_rows_count(&self) -> i32 {
         i32::try_from(self.rows.len()).expect("assert: number of new rows fits i32::MAX")
     }
 
@@ -604,18 +604,18 @@ impl Rows {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+pub mod tests {
     use super::*;
-    use rand::{distributions::Alphanumeric, Rng};
+    use rand::{distr::Alphanumeric, Rng};
     use std::collections::HashSet;
 
     impl Sheet {
-        pub(crate) fn title(&self) -> &str {
+        pub fn title(&self) -> &str {
             &self.title
         }
     }
 
-    pub(crate) fn mock_ordinary_google_sheet(title: &str) -> GoogleSheet {
+    pub fn mock_ordinary_google_sheet(title: &str) -> GoogleSheet {
         GoogleSheet {
             banded_ranges: None,
             basic_filter: None,
@@ -660,7 +660,7 @@ pub(crate) mod tests {
         }
     }
 
-    pub(crate) fn mock_sheet_with_properties(properties: SheetProperties) -> GoogleSheet {
+    pub fn mock_sheet_with_properties(properties: SheetProperties) -> GoogleSheet {
         GoogleSheet {
             banded_ranges: None,
             basic_filter: None,
@@ -687,11 +687,11 @@ pub(crate) mod tests {
     #[test]
     fn id_collision() {
         let mut counts = HashMap::new();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         //let total = crate::google::spreadsheet::GOOGLE_SPREADSHEET_MAXIMUM_CELLS; // a theoretical number of sheets
         let total = 50; // a reasonable number of sheets
         for _ in 0..total {
-            let n: usize = rng.gen_range(10..40);
+            let n: usize = rng.random_range(10..40);
             let s: String = (&mut rng)
                 .sample_iter(&Alphanumeric)
                 .take(n)

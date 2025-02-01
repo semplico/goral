@@ -1,7 +1,8 @@
-pub(crate) mod configuration;
+pub mod configuration;
 mod discord;
 mod slack;
 mod telegram;
+use crate::http::HttpClient;
 use crate::messenger::configuration::MessengerConfig;
 use crate::messenger::discord::Discord;
 use crate::messenger::slack::Slack;
@@ -35,12 +36,13 @@ pub trait Messenger {
 }
 
 pub fn get_messenger(host: &str) -> Result<BoxedMessenger> {
+    let client = HttpClient::strict(32768, true);
     if host.contains("telegram") {
-        Ok(Box::new(Telegram::new()))
+        Ok(Box::new(Telegram::new(client)))
     } else if host.contains("slack") {
-        Ok(Box::new(Slack::new()))
+        Ok(Box::new(Slack::new(client)))
     } else if host.contains("discord") {
-        Ok(Box::new(Discord::new()))
+        Ok(Box::new(Discord::new(client)))
     } else {
         Err(anyhow!(
             "Unsupported messenger. Currently available: Telegram, Slack, Discord"
@@ -49,19 +51,19 @@ pub fn get_messenger(host: &str) -> Result<BoxedMessenger> {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+pub mod tests {
     use super::*;
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     };
 
-    pub(crate) struct TestMessenger {
+    pub struct TestMessenger {
         counter: Arc<AtomicUsize>,
     }
 
     impl TestMessenger {
-        pub(crate) fn new(counter: Arc<AtomicUsize>) -> Self {
+        pub fn new(counter: Arc<AtomicUsize>) -> Self {
             Self { counter }
         }
         async fn send_message(&self, _: &MessengerConfig, _: &str) -> Result<()> {

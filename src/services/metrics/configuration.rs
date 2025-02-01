@@ -7,6 +7,21 @@ use serde_derive::Deserialize;
 use serde_valid::Validate;
 use url::Url;
 
+pub(super) fn scrape_push_rule_validate(
+    endpoints: &[Target],
+    push_interval_secs: &u16,
+    scrape_interval_secs: &u16,
+    scrape_timeout_ms: &u32,
+) -> Result<(), serde_valid::validation::Error> {
+    scrape_push_rule(
+        endpoints,
+        push_interval_secs,
+        scrape_interval_secs,
+        scrape_timeout_ms,
+    )?;
+    Ok(())
+}
+
 pub(super) fn scrape_push_rule(
     endpoints: &[Target],
     push_interval_secs: &u16,
@@ -57,9 +72,7 @@ pub(super) fn scrape_push_rule(
     Ok(number_of_queued_rows)
 }
 
-pub(crate) fn host_port_validation_for_http(
-    url: &Url,
-) -> Result<(), serde_valid::validation::Error> {
+pub fn host_port_validation_for_http(url: &Url) -> Result<(), serde_valid::validation::Error> {
     host_validation(url)?;
     port_validation(url)?;
     if url.scheme() != "http" && url.scheme() != "https" {
@@ -70,7 +83,7 @@ pub(crate) fn host_port_validation_for_http(
     Ok(())
 }
 
-pub(crate) fn target_names(target: &Vec<Target>) -> Result<(), serde_valid::validation::Error> {
+pub fn target_names(target: &Vec<Target>) -> Result<(), serde_valid::validation::Error> {
     for t in target {
         if target.len() > 1 && t.name.is_none() {
             return Err(serde_valid::validation::Error::Custom(
@@ -87,12 +100,12 @@ fn scrape_timeout_ms() -> u32 {
 
 #[derive(Debug, Deserialize, PartialEq, Validate)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct Target {
+pub struct Target {
     #[validate(custom(host_port_validation_for_http))]
-    pub(crate) endpoint: Url,
+    pub endpoint: Url,
     #[validate(custom(log_name_opt))]
     #[validate(min_length = 1)]
-    pub(crate) name: Option<String>,
+    pub name: Option<String>,
 }
 
 fn autotruncate_at_usage_percent() -> f32 {
@@ -101,30 +114,30 @@ fn autotruncate_at_usage_percent() -> f32 {
 
 #[derive(Debug, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
-#[rule(scrape_timeout_interval_rule(scrape_interval_secs, scrape_timeout_ms))]
-#[rule(scrape_push_rule(target, push_interval_secs, scrape_interval_secs, scrape_timeout_ms))]
+#[validate(custom = |s| scrape_timeout_interval_rule(&s.scrape_interval_secs, &s.scrape_timeout_ms))]
+#[validate(custom = |s| scrape_push_rule_validate(&s.target, &s.push_interval_secs, &s.scrape_interval_secs, &s.scrape_timeout_ms))]
 #[allow(unused)]
-pub(crate) struct Metrics {
+pub struct Metrics {
     #[validate]
-    pub(crate) messenger: Option<MessengerConfig>,
-    pub(crate) spreadsheet_id: String,
+    pub messenger: Option<MessengerConfig>,
+    pub spreadsheet_id: String,
     #[validate(minimum = 10)]
     #[serde(default = "push_interval_secs")]
-    pub(crate) push_interval_secs: u16,
+    pub push_interval_secs: u16,
     #[validate(minimum = 1)]
     #[serde(default = "scrape_interval_secs")]
-    pub(crate) scrape_interval_secs: u16,
+    pub scrape_interval_secs: u16,
     #[validate(minimum = 1)]
     #[serde(default = "scrape_timeout_ms")]
-    pub(crate) scrape_timeout_ms: u32,
+    pub scrape_timeout_ms: u32,
     #[validate]
     #[validate(custom(target_names))]
     #[validate(min_items = 1)]
-    pub(crate) target: Vec<Target>,
+    pub target: Vec<Target>,
     #[validate(minimum = 0.0)]
     #[validate(maximum = 100.0)]
     #[serde(default = "autotruncate_at_usage_percent")]
-    pub(crate) autotruncate_at_usage_percent: f32,
+    pub autotruncate_at_usage_percent: f32,
 }
 
 #[cfg(test)]

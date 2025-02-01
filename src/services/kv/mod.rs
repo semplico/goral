@@ -1,5 +1,6 @@
-pub(crate) mod configuration;
+pub mod configuration;
 use crate::google::datavalue::{Datarow, Datavalue};
+use crate::http::{run_server, to_body, Body};
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{MessengerApi, Notification, Sender};
 use crate::rules::RULES_LOG_NAME;
@@ -10,20 +11,18 @@ use crate::{capture_datetime, Shared};
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use futures::future::try_join_all;
-use hyper::service::{make_service_fn, service_fn};
+use http_body_util::BodyExt;
 use hyper::{
-    body::Buf, header, Body, Method, Request as HyperRequest, Response as HyperResponse, Server,
-    StatusCode,
+    body::Buf, header, Method, Request as HyperRequest, Response as HyperResponse, StatusCode,
 };
 use serde::{de::Deserializer, Deserialize, Serialize};
 use serde_valid::Validate;
 use std::collections::HashSet;
+use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-
 use tokio::sync::broadcast;
-
 use tokio::sync::mpsc::{self};
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
@@ -133,7 +132,7 @@ impl Drop for ReadyHandle {
     }
 }
 
-pub(crate) struct KvService {
+pub struct KvService {
     shared: Shared,
     spreadsheet_id: String,
     messenger: Option<MessengerApi>,
@@ -141,8 +140,14 @@ pub(crate) struct KvService {
     truncate_at: f32,
 }
 
+#[derive(Clone)]
+struct ServerEnvironment {
+    is_ready: Arc<AtomicBool>,
+    data_bus: mpsc::Sender<AppendRequest>,
+}
+
 impl KvService {
-    pub(crate) fn new(shared: Shared, mut config: Kv) -> KvService {
+    pub fn new(shared: Shared, mut config: Kv) -> KvService {
         let messenger = config
             .messenger
             .take()
@@ -157,11 +162,11 @@ impl KvService {
     }
 
     async fn router(
-        req: HyperRequest<Body>,
-        data_bus: mpsc::Sender<AppendRequest>,
+        req: HyperRequest<hyper::body::Incoming>,
         send_notification: Sender,
-        is_ready: Arc<AtomicBool>,
+        environment: ServerEnvironment,
     ) -> Result<HyperResponse<Body>, hyper::Error> {
+        let ServerEnvironment { is_ready, data_bus } = environment;
         if is_ready
             .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
             .is_err()
@@ -169,21 +174,21 @@ impl KvService {
             return Ok(HyperResponse::builder()
                 .status(StatusCode::TOO_MANY_REQUESTS)
                 .header(header::CONTENT_TYPE, "application/json")
-                .body("no concurrent requests are allowed".to_string().into())
+                .body(to_body("no concurrent requests are allowed".as_bytes()))
                 .expect("assert: should be able to construct response for static body"));
         }
         let _handle = ReadyHandle(is_ready);
 
         match (req.method(), req.uri().path()) {
             (&Method::POST, "/api/kv") => {
-                let body = hyper::body::aggregate(req).await?;
+                let body = req.collect().await?.aggregate();
                 let req_body: Request = match serde_json::from_reader(body.reader()) {
                     Err(e) => {
                         tracing::warn!("invalid request to KV service: {e}");
                         return Ok(HyperResponse::builder()
                         .status(StatusCode::UNPROCESSABLE_ENTITY)
                         .header(header::CONTENT_TYPE, "application/json")
-                        .body(e.to_string().into())
+                        .body(to_body(e.to_string().into_bytes()))
                         .expect("assert: should be able to construct response for invalid kv request"));
                     }
                     Ok(b) => b,
@@ -193,7 +198,7 @@ impl KvService {
                     return Ok(HyperResponse::builder()
                         .status(StatusCode::BAD_REQUEST)
                         .header(header::CONTENT_TYPE, "application/json")
-                        .body(e.to_string().into())
+                        .body(to_body(e.to_string().into_bytes()))
                         .expect(
                             "assert: should be able to construct response for invalid kv request",
                         ));
@@ -227,73 +232,55 @@ impl KvService {
                         return Ok(HyperResponse::builder()
                             .status(StatusCode::INTERNAL_SERVER_ERROR)
                             .header(header::CONTENT_TYPE, "application/json")
-                            .body(Body::from(text))
+                            .body(to_body(text.into_bytes()))
                             .expect("assert: should be able to build response body from string"));
                     }
                     Ok(Err(StorageError::NonRetriable(text))) => {
                         return Ok(HyperResponse::builder()
                             .status(StatusCode::BAD_REQUEST)
                             .header(header::CONTENT_TYPE, "application/json")
-                            .body(Body::from(text))
+                            .body(to_body(text.into_bytes()))
                             .expect("assert: should be able to build response body from string"));
                     }
                     Ok(Ok(sheet_urls)) => sheet_urls,
                 };
 
-                let json = serde_json::to_string(&Response { sheet_urls })
+                let json = serde_json::to_vec(&Response { sheet_urls })
                     .expect("assert: should be able to serialize vector of sheet urls");
                 let response = HyperResponse::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(json))
+                    .body(to_body(json))
                     .expect("assert: should be able to serialize append return value");
                 Ok(response)
             }
             _ => Ok(HyperResponse::builder()
                 .status(StatusCode::NOT_FOUND)
-                .body(Body::empty())
+                .body(Body::default())
                 .expect("assert: should be able to construct empty response body")),
         }
     }
 
     async fn start_server(
         &self,
-        mut shutdown: broadcast::Receiver<u16>,
+        shutdown: broadcast::Receiver<u16>,
         data_bus: mpsc::Sender<AppendRequest>,
     ) -> JoinHandle<()> {
-        let addr = ([127, 0, 0, 1], self.port).into();
+        let addr: SocketAddr = ([127, 0, 0, 1], self.port).into();
 
         let send_notification = self.shared.send_notification.clone();
         let is_ready = Arc::new(AtomicBool::new(true));
-        let server = Server::bind(&addr).serve(make_service_fn(move |_| {
-            let send_notification = send_notification.clone();
-            let data_bus = data_bus.clone();
-            let is_ready = is_ready.clone();
-            async move {
-                Ok::<_, hyper::Error>(service_fn(move |req| {
-                    let send_notification = send_notification.clone();
-                    let data_bus = data_bus.clone();
-                    let is_ready = is_ready.clone();
-                    Self::router(req, data_bus, send_notification, is_ready)
-                }))
-            }
-        }));
+        let environment = ServerEnvironment { is_ready, data_bus };
 
-        let server = server.with_graceful_shutdown(async move {
-            shutdown.recv().await.ok();
-            tracing::info!("KV server is shutting down");
-        });
-
-        let send_notification = self.shared.send_notification.clone();
-        tokio::spawn(async move {
-            tracing::info!("KV server is listening on http://{}", addr);
-            if let Err(e) = server.await {
-                let msg = format!("cannot run KV server `{e}`");
-                tracing::error!("{}", msg);
-                send_notification.fatal(msg.to_string()).await;
-                panic!("cannot run KV server");
-            }
-        })
+        run_server(
+            addr,
+            "KV",
+            send_notification,
+            shutdown,
+            environment,
+            Self::router,
+        )
+        .await
     }
 }
 
@@ -441,11 +428,11 @@ mod tests {
     use crate::google::spreadsheet::tests::TestState;
     use crate::google::spreadsheet::SpreadsheetAPI;
     use crate::google::Metadata;
+    use crate::http::{HttpClient, Uri};
     use crate::notifications::Sender;
     use crate::storage::Storage;
     use crate::tests::TEST_HOST_ID;
     use crate::Shared;
-    use hyper::{header, Body, Client, Method};
     use serde_json::json;
     use std::sync::Arc;
     use tokio::sync::{broadcast, mpsc};
@@ -490,9 +477,10 @@ mod tests {
             service.run(log, rx).await;
         });
 
-        let client = Client::new();
+        let client = HttpClient::lousy(32768, true, Duration::from_secs(5));
+        let url: Uri = "http://localhost:49152/api/kv".parse().unwrap();
 
-        let payload = serde_json::to_string(&json!({"rows": [
+        let payload = json!({"rows": [
             {
                 "log_name": "js_error",
                 "datetime": "2023-12-09T09:50:46.136945094Z",
@@ -503,25 +491,18 @@ mod tests {
                 "datetime": "2023-12-09T09:50:46.136945094Z",
                 "data": [("csp_violation", "cross origin resource"), ("datetime", "2023-12-11 09:19:32.827321506")]
             }
-        ]})).unwrap();
-
-        let req = HyperRequest::builder()
-            .method(Method::POST)
-            .uri("http://localhost:49152/api/kv")
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(payload))
-            .expect("request builder");
-
+        ]});
         tokio::time::sleep(Duration::from_secs(1)).await;
-        let response = client.request(req).await.unwrap();
+        let (body, response) = client
+            .post_json(url.clone(), vec![], &payload)
+            .await
+            .unwrap();
         assert_eq!(
             response.status(),
             200,
             "correct KV request should be accepted"
         );
-
-        let body = hyper::body::aggregate(response).await.unwrap();
-        let kv_response: Response = serde_json::from_reader(body.reader()).unwrap();
+        let kv_response: Response = serde_json::from_slice(&body).unwrap();
 
         assert_eq!(
             kv_response.sheet_urls.len(),
@@ -529,23 +510,18 @@ mod tests {
             "2 sheets should be created: for `js_error` and `browser_report`"
         );
 
-        let invalid_payload = serde_json::to_string(&json!({"rows": [
+        let invalid_payload = json!({"rows": [
             {
                 "log_name": "js error",
                 "datetime": "2023-12-09T09:50:46.136945094Z",
                 "data": [("trace_id", 123)]
             }
-        ]}))
-        .unwrap();
+        ]});
 
-        let req = HyperRequest::builder()
-            .method(Method::POST)
-            .uri("http://localhost:49152/api/kv")
-            .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(invalid_payload))
-            .expect("request builder");
-
-        let response = client.request(req).await.unwrap();
+        let (_, response) = client
+            .post_json(url, vec![], &invalid_payload)
+            .await
+            .unwrap();
 
         assert_eq!(
             response.status(),

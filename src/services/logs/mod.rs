@@ -1,4 +1,4 @@
-pub(crate) mod configuration;
+pub mod configuration;
 use crate::google::datavalue::{Datarow, Datavalue};
 use crate::google::spreadsheet::GOOGLE_SPREADSHEET_MAXIMUM_CHARS_PER_CELL;
 use crate::messenger::configuration::MessengerConfig;
@@ -25,7 +25,7 @@ use tokio::task::JoinHandle;
 pub const LOGS_SERVICE_NAME: &str = "logs";
 const LEVEL_KEY: &str = "level";
 
-pub(crate) struct LogsService {
+pub struct LogsService {
     shared: Shared,
     spreadsheet_id: String,
     push_interval: Duration,
@@ -37,7 +37,7 @@ pub(crate) struct LogsService {
 }
 
 impl LogsService {
-    pub(crate) fn new(shared: Shared, mut config: Logs) -> LogsService {
+    pub fn new(shared: Shared, mut config: Logs) -> LogsService {
         let channel_capacity = channel_capacity(&config.push_interval_secs);
         let messenger = config
             .messenger

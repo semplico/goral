@@ -21,17 +21,17 @@ fn autotruncate_at_usage_percent() -> f32 {
 #[derive(Debug, Deserialize, Validate)]
 #[serde(deny_unknown_fields)]
 #[allow(unused)]
-pub(crate) struct Kv {
-    pub(crate) spreadsheet_id: String,
+pub struct Kv {
+    pub spreadsheet_id: String,
     #[validate]
-    pub(crate) messenger: Option<MessengerConfig>,
-    #[validate(minimum = 49152, message_fn(port_min_error_message))]
-    #[validate(maximum = 65535, message_fn(port_max_error_message))]
-    pub(crate) port: u16,
+    pub messenger: Option<MessengerConfig>,
+    #[validate(minimum = 49152, message_fn = port_min_error_message)]
+    #[validate(maximum = 65535, message_fn = port_max_error_message)]
+    pub port: u16,
     #[validate(minimum = 0.0)]
     #[validate(maximum = 100.0)]
     #[serde(default = "autotruncate_at_usage_percent")]
-    pub(crate) autotruncate_at_usage_percent: f32,
+    pub autotruncate_at_usage_percent: f32,
 }
 
 #[cfg(test)]

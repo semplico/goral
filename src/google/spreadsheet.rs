@@ -3,9 +3,9 @@ use crate::google::sheet::{CleanupSheet, Rows, Sheet, SheetId, UpdateSheet, Virt
 use crate::google::Metadata;
 use crate::storage::StorageError;
 
-use crate::notifications::Sender;
 #[cfg(not(test))]
-use crate::HyperConnector;
+use crate::http::HyperConnector;
+use crate::notifications::Sender;
 use chrono::Utc;
 use google_sheets4::api::{
     BatchUpdateSpreadsheetRequest, BatchUpdateSpreadsheetResponse, Spreadsheet,
@@ -16,30 +16,30 @@ use google_sheets4::{
         BatchGetValuesByDataFilterRequest, DataFilter, DeveloperMetadataLookup,
         GetSpreadsheetByDataFilterRequest, GridRange, Sheets,
     },
-    oauth2::authenticator::Authenticator,
+    yup_oauth2::authenticator::Authenticator,
 };
-use google_sheets4::{
-    hyper::{self, Body},
-    Error, Result as SheetsResult,
-};
-use http::response::Response;
+use google_sheets4::{hyper, Error as SheetsError, Result as SheetsResult};
 use serde_json::Value;
 
 #[cfg(test)]
 use crate::google::spreadsheet::tests::TestState;
 
 // https://support.google.com/docs/thread/181288162/whats-the-maximum-amount-of-rows-in-google-sheets?hl=en
-pub(crate) const GOOGLE_SPREADSHEET_MAXIMUM_CELLS: u32 = 10_000_000;
-pub(crate) const GOOGLE_SPREADSHEET_MAXIMUM_CHARS_PER_CELL: usize = 50_000;
+pub const GOOGLE_SPREADSHEET_MAXIMUM_CELLS: u32 = 10_000_000;
+pub const GOOGLE_SPREADSHEET_MAXIMUM_CHARS_PER_CELL: usize = 50_000;
+type SheetResponse<T = BatchUpdateSpreadsheetResponse> = SheetsResult<(
+    hyper::Response<http_body_util::combinators::BoxBody<hyper::body::Bytes, hyper::Error>>,
+    T,
+)>;
 
 async fn handle_error<T>(
     spreadsheet: &SpreadsheetAPI,
-    result: SheetsResult<(Response<Body>, T)>,
+    result: SheetResponse<T>,
 ) -> Result<T, StorageError> {
     match result {
         Err(e) => match e {
             // fatal
-            Error::MissingAPIKey => {
+            SheetsError::MissingAPIKey => {
                 tracing::error!("{}", e);
                 spreadsheet
                     .send_notification
@@ -47,7 +47,7 @@ async fn handle_error<T>(
                     .await;
                 panic!("Fatal error for Google API access: `{}`", e);
             }
-            Error::MissingToken(_) => {
+            SheetsError::MissingToken(_) => {
                 let msg = format!("`MissingToken error` for Google API\nProbably server time skewed which is now `{}`\nSync server time with NTP", Utc::now());
                 tracing::error!("{}{}", e, msg);
                 spreadsheet.send_notification.fatal(msg).await;
@@ -56,7 +56,7 @@ async fn handle_error<T>(
                     e
                 );
             }
-            Error::UploadSizeLimitExceeded(actual, limit) => {
+            SheetsError::UploadSizeLimitExceeded(actual, limit) => {
                 let msg = format!("uploading to much data {actual} vs limit of {limit} bytes");
                 tracing::error!("{}", msg);
                 spreadsheet
@@ -66,9 +66,9 @@ async fn handle_error<T>(
                 panic!("Fatal error for Google API access: `{}`", msg);
             }
             // retry
-            Error::Failure(v) => Err(StorageError::Retriable(format!("failure: {v:?}"))),
-            Error::HttpError(v) => Err(StorageError::Retriable(format!("http error: {v}"))),
-            Error::BadRequest(v) => {
+            SheetsError::Failure(v) => Err(StorageError::Retriable(format!("failure: {v:?}"))),
+            SheetsError::HttpError(v) => Err(StorageError::Retriable(format!("http error: {v}"))),
+            SheetsError::BadRequest(v) => {
                 match v
                     .get("error")
                     .and_then(|e| e.get("code"))
@@ -80,12 +80,14 @@ async fn handle_error<T>(
                     _ => Err(StorageError::NonRetriable(format!("bad request: {v}"))),
                 }
             }
-            Error::Io(v) => Err(StorageError::Retriable(format!("io: {v}"))),
-            Error::JsonDecodeError(_, v) => Err(StorageError::NonRetriable(format!(
+            SheetsError::Io(v) => Err(StorageError::Retriable(format!("io: {v}"))),
+            SheetsError::JsonDecodeError(_, v) => Err(StorageError::NonRetriable(format!(
                 "json decode error: {v}"
             ))),
-            Error::FieldClash(v) => Err(StorageError::NonRetriable(format!("field clash: {v}"))),
-            Error::Cancelled => Err(StorageError::Retriable("cancelled".to_string())),
+            SheetsError::FieldClash(v) => {
+                Err(StorageError::NonRetriable(format!("field clash: {v}")))
+            }
+            SheetsError::Cancelled => Err(StorageError::Retriable("cancelled".to_string())),
         },
         Ok(res) => Ok(res.1),
     }
@@ -103,14 +105,15 @@ impl SpreadsheetAPI {
     #[cfg(not(test))]
     pub fn new(authenticator: Authenticator<HyperConnector>, send_notification: Sender) -> Self {
         let hub = Sheets::new(
-            hyper::Client::builder().build(
-                hyper_rustls::HttpsConnectorBuilder::new()
-                    .with_native_roots()
-                    .expect("assert: can build sheets client with native root certs")
-                    .https_only()
-                    .enable_http1()
-                    .build(),
-            ),
+            hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+                .build(
+                    hyper_rustls::HttpsConnectorBuilder::new()
+                        .with_native_roots()
+                        .expect("assert: can build sheets client with native root certs")
+                        .https_only()
+                        .enable_http1()
+                        .build(),
+                ),
             authenticator,
         );
         Self {
@@ -120,7 +123,7 @@ impl SpreadsheetAPI {
     }
 
     #[cfg(test)]
-    pub(crate) fn new(send_notification: Sender, state: TestState) -> Self {
+    pub fn new(send_notification: Sender, state: TestState) -> Self {
         Self {
             send_notification,
             state: tokio::sync::Mutex::new(state),
@@ -128,11 +131,7 @@ impl SpreadsheetAPI {
     }
 
     #[cfg(not(test))]
-    async fn get(
-        &self,
-        spreadsheet_id: &str,
-        metadata: &Metadata,
-    ) -> SheetsResult<(Response<Body>, Spreadsheet)> {
+    async fn get(&self, spreadsheet_id: &str, metadata: &Metadata) -> SheetResponse<Spreadsheet> {
         let filters: Vec<_> = metadata
             .iter()
             .map(|(k, v)| DataFilter {
@@ -159,7 +158,7 @@ impl SpreadsheetAPI {
     }
 
     #[cfg(not(test))]
-    pub(crate) async fn get_sheet_data(
+    pub async fn get_sheet_data(
         &self,
         spreadsheet_id: &str,
         sheet_id: SheetId,
@@ -200,7 +199,7 @@ impl SpreadsheetAPI {
     }
 
     #[cfg(test)]
-    pub(crate) async fn get_sheet_data(
+    pub async fn get_sheet_data(
         &self,
         spreadsheet_id: &str,
         sheet_id: SheetId,
@@ -210,11 +209,7 @@ impl SpreadsheetAPI {
     }
 
     #[cfg(test)]
-    async fn get(
-        &self,
-        spreadsheet_id: &str,
-        _metadata: &Metadata,
-    ) -> SheetsResult<(Response<Body>, Spreadsheet)> {
+    async fn get(&self, spreadsheet_id: &str, _metadata: &Metadata) -> SheetResponse<Spreadsheet> {
         let mut state = self.state.lock().await;
         state.get(spreadsheet_id).await
     }
@@ -224,7 +219,7 @@ impl SpreadsheetAPI {
         &self,
         req: BatchUpdateSpreadsheetRequest,
         spreadsheet_id: &str,
-    ) -> SheetsResult<(Response<Body>, BatchUpdateSpreadsheetResponse)> {
+    ) -> SheetResponse {
         self.hub
             .spreadsheets()
             .batch_update(req, spreadsheet_id)
@@ -237,20 +232,20 @@ impl SpreadsheetAPI {
         &self,
         req: BatchUpdateSpreadsheetRequest,
         spreadsheet_id: &str,
-    ) -> SheetsResult<(Response<Body>, BatchUpdateSpreadsheetResponse)> {
+    ) -> SheetResponse {
         let mut state = self.state.lock().await;
         state.update(req, spreadsheet_id).await
     }
 
-    pub(crate) fn sheet_url(&self, spreadsheet_id: &str, sheet_id: SheetId) -> String {
+    pub fn sheet_url(&self, spreadsheet_id: &str, sheet_id: SheetId) -> String {
         format!("{GOOGLE_SHEET_BASE}{spreadsheet_id}#gid={sheet_id}")
     }
 
-    pub(crate) fn spreadsheet_baseurl(&self, spreadsheet_id: &str) -> String {
+    pub fn spreadsheet_baseurl(&self, spreadsheet_id: &str) -> String {
         format!("{GOOGLE_SHEET_BASE}{spreadsheet_id}#gid=")
     }
 
-    pub(crate) async fn sheets_filtered_by_metadata(
+    pub async fn sheets_filtered_by_metadata(
         &self,
         spreadsheet_id: &str,
         metadata: &Metadata,
@@ -317,7 +312,7 @@ impl SpreadsheetAPI {
         handle_error(self, result).await
     }
 
-    pub(crate) async fn crud_sheets(
+    pub async fn crud_sheets(
         &self,
         spreadsheet_id: &str,
         truncates: Vec<CleanupSheet>,
@@ -336,9 +331,10 @@ impl SpreadsheetAPI {
 }
 
 #[cfg(test)]
-pub(crate) mod tests {
+pub mod tests {
     use super::*;
     use crate::google::sheet::tests::mock_sheet_with_properties;
+    use crate::http::{to_body, Body};
     use google_sheets4::api::Sheet as GoogleSheet;
     use google_sheets4::api::{
         AddSheetRequest, AppendCellsRequest, BasicFilter, CreateDeveloperMetadataRequest,
@@ -346,24 +342,24 @@ pub(crate) mod tests {
         SetBasicFilterRequest, SetDataValidationRequest, UpdateCellsRequest,
         UpdateDeveloperMetadataRequest,
     };
-    use hyper::{header, Body, Response as HyperResponse, StatusCode};
+    use hyper::{header, Response as HyperResponse, StatusCode};
     use std::collections::{HashMap, HashSet};
     use std::time::Duration;
     use tokio::time::sleep;
 
-    pub(crate) struct TestState {
+    pub struct TestState {
         sheets: HashMap<SheetId, GoogleSheet>,
         sheet_titles: HashSet<String>,
         metadata: HashMap<i32, (SheetId, usize)>,
-        respond_with_error: Option<Error>,
+        respond_with_error: Option<SheetsError>,
         basic_response_duration_millis: u64,
         basic_response_duration_millis_for_second_request: u64,
     }
 
     impl TestState {
-        pub(crate) fn new(
+        pub fn new(
             sheets: Vec<GoogleSheet>,
-            respond_with_error: Option<Error>,
+            respond_with_error: Option<SheetsError>,
             basic_response_duration_millis: Option<u64>,
         ) -> Self {
             Self::create(
@@ -374,7 +370,7 @@ pub(crate) mod tests {
             )
         }
 
-        pub(crate) fn with_response_durations(
+        pub fn with_response_durations(
             sheets: Vec<GoogleSheet>,
             basic_response_duration_millis: u64,
             basic_response_duration_millis_for_second_request: u64,
@@ -389,7 +385,7 @@ pub(crate) mod tests {
 
         fn create(
             sheets: Vec<GoogleSheet>,
-            respond_with_error: Option<Error>,
+            respond_with_error: Option<SheetsError>,
             basic_response_duration_millis: Option<u64>,
             basic_response_duration_millis_for_second_request: Option<u64>,
         ) -> Self {
@@ -431,21 +427,21 @@ pub(crate) mod tests {
             }
         }
 
-        pub(crate) fn failure_response(text: String) -> Error {
-            Error::Failure(
+        pub fn failure_response(text: String) -> SheetsError {
+            SheetsError::Failure(
                 HyperResponse::builder()
                     .status(StatusCode::BAD_REQUEST)
                     .header(header::CONTENT_TYPE, "application/json; charset=UTF-8")
-                    .body(Body::from(text))
+                    .body(to_body(text.into_bytes()))
                     .expect("test assert: test state mock can create responses from strings"),
             )
         }
 
-        pub(crate) fn bad_response(text: String) -> Error {
-            Error::BadRequest(serde_json::json!(text))
+        pub fn bad_response(text: String) -> SheetsError {
+            SheetsError::BadRequest(serde_json::json!(text))
         }
 
-        pub(crate) async fn get(&mut self, _: &str) -> SheetsResult<(Response<Body>, Spreadsheet)> {
+        pub async fn get(&mut self, _: &str) -> SheetResponse<Spreadsheet> {
             let response_duration_millis = self.basic_response_duration_millis;
             self.basic_response_duration_millis =
                 self.basic_response_duration_millis_for_second_request;
@@ -461,7 +457,7 @@ pub(crate) mod tests {
                 HyperResponse::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "application/json; charset=UTF-8")
-                    .body(Body::from("streaming"))
+                    .body(Body::default())
                     .unwrap(),
                 Spreadsheet {
                     data_source_schedules: None,
@@ -476,7 +472,7 @@ pub(crate) mod tests {
             ))
         }
 
-        pub(crate) async fn get_sheet_data(
+        pub async fn get_sheet_data(
             &mut self,
             _spreadsheet_id: &str,
             _sheet_id: SheetId,
@@ -484,11 +480,11 @@ pub(crate) mod tests {
             Ok(vec![])
         }
 
-        pub(crate) async fn update(
+        pub async fn update(
             &mut self,
             req: BatchUpdateSpreadsheetRequest,
             _: &str,
-        ) -> SheetsResult<(Response<Body>, BatchUpdateSpreadsheetResponse)> {
+        ) -> SheetResponse<BatchUpdateSpreadsheetResponse> {
             let requests = req
                 .requests
                 .expect("test assert: batch update must have requests");
@@ -756,7 +752,7 @@ pub(crate) mod tests {
                 HyperResponse::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "application/json; charset=UTF-8")
-                    .body(Body::from("streaming"))
+                    .body(Body::default())
                     .unwrap(),
                 BatchUpdateSpreadsheetResponse {
                     ..Default::default()

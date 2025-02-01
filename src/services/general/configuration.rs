@@ -22,7 +22,7 @@ pub struct General {
     pub log_level: Level,
     pub service_account_credentials_path: String,
     #[validate]
-    pub(crate) messenger: MessengerConfig,
+    pub messenger: MessengerConfig,
     #[validate(minimum = 1)]
     #[serde(default = "graceful_timeout_secs")]
     pub graceful_timeout_secs: u16,

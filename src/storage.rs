@@ -114,17 +114,17 @@ impl AppendableLog {
             .collect())
     }
 
-    pub(crate) async fn healthcheck(&self) -> Result<(), StorageError> {
+    pub async fn healthcheck(&self) -> Result<(), StorageError> {
         self.fetch_sheets().await?;
         Ok(())
     }
 
-    pub(crate) async fn append(&mut self, datarows: Vec<Datarow>) -> Result<(), StorageError> {
+    pub async fn append(&mut self, datarows: Vec<Datarow>) -> Result<(), StorageError> {
         self.core_append(datarows, Some(Duration::from_secs(32)))
             .await
     }
 
-    pub(crate) async fn append_no_retry(
+    pub async fn append_no_retry(
         &mut self,
         mut datarows: Vec<Datarow>,
     ) -> Result<Vec<String>, StorageError> {
@@ -516,23 +516,23 @@ impl AppendableLog {
         requests
     }
 
-    pub(crate) fn host_id(&self) -> &str {
+    pub fn host_id(&self) -> &str {
         &self.storage.host_id
     }
 
-    pub(crate) fn sheet_url(&self, sheet_id: SheetId) -> String {
+    pub fn sheet_url(&self, sheet_id: SheetId) -> String {
         self.storage
             .google
             .sheet_url(&self.spreadsheet_id, sheet_id)
     }
 
-    pub(crate) fn spreadsheet_baseurl(&self) -> String {
+    pub fn spreadsheet_baseurl(&self) -> String {
         self.storage
             .google
             .spreadsheet_baseurl(&self.spreadsheet_id)
     }
 
-    pub(crate) async fn get_rules(&self) -> Result<Vec<Rule>, StorageError> {
+    pub async fn get_rules(&self) -> Result<Vec<Rule>, StorageError> {
         let timeout = Duration::from_millis(2000);
         tokio::select! {
             _ = tokio::time::sleep(timeout) => Err(StorageError::Timeout(timeout)),
@@ -603,7 +603,7 @@ mod tests {
     use tokio::sync::mpsc;
 
     impl Storage {
-        pub(crate) fn google(&self) -> &SpreadsheetAPI {
+        pub fn google(&self) -> &SpreadsheetAPI {
             &self.google
         }
     }

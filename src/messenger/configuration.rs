@@ -29,7 +29,7 @@ fn messenger_implementation_host_rule(
 
 #[derive(Deserialize, Clone, Validate, PartialEq)]
 #[serde(untagged)]
-pub(crate) enum MessengerImplementation {
+pub enum MessengerImplementation {
     Slack { token: String, channel: String },
     Telegram { chat_id: String },
     Discord,
@@ -56,16 +56,16 @@ fn send_google_append_error() -> bool {
 }
 
 #[derive(Deserialize, Clone, Validate)]
-#[rule(messenger_implementation_host_rule(implementation, url))]
+#[validate(custom = |s| messenger_implementation_host_rule(&s.implementation, &s.url))]
 #[serde(deny_unknown_fields)]
 pub struct MessengerConfig {
     #[serde(rename(deserialize = "specific"))]
-    pub(crate) implementation: Option<MessengerImplementation>,
-    pub(crate) url: Url,
+    pub implementation: Option<MessengerImplementation>,
+    pub url: Url,
     #[serde(default)]
-    pub(crate) send_rules_update_error: bool,
+    pub send_rules_update_error: bool,
     #[serde(default = "send_google_append_error")]
-    pub(crate) send_google_append_error: bool,
+    pub send_google_append_error: bool,
 }
 
 impl MessengerConfig {

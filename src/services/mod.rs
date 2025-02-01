@@ -1,10 +1,9 @@
-pub(crate) mod general;
-pub(crate) mod healthcheck;
-pub(crate) mod http_client;
-pub(crate) mod kv;
-pub(crate) mod logs;
-pub(crate) mod metrics;
-pub(crate) mod system;
+pub mod general;
+pub mod healthcheck;
+pub mod kv;
+pub mod logs;
+pub mod metrics;
+pub mod system;
 
 use crate::google::datavalue::{Datarow, Datavalue};
 use crate::messenger::configuration::MessengerConfig;
@@ -33,7 +32,7 @@ pub enum Data {
 }
 
 impl Data {
-    pub(crate) fn into_iter(self) -> DataIntoIter {
+    pub fn iterator(self) -> DataIntoIter {
         match self {
             Data::Empty | Data::Message(_) => DataIntoIter {
                 next: None,
@@ -104,7 +103,7 @@ fn process_rules(
                 continue;
             }
             RulePayload::Data(data) => {
-                for row in data.into_iter() {
+                for row in data.iterator() {
                     let applicant = row.into();
                     for rule in &rules {
                         match rule.apply(&applicant) {

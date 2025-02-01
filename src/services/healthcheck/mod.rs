@@ -1,20 +1,19 @@
-pub(crate) mod configuration;
+pub mod configuration;
 
 use crate::configuration::APP_NAME;
 use crate::google::datavalue::{Datarow, Datavalue};
+use crate::http::{HttpClient, Uri};
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{MessengerApi, Notification, Sender};
 use crate::services::healthcheck::configuration::{
     scrape_push_rule, Healthcheck, Liveness as LivenessConfig, LivenessType,
 };
-use crate::services::http_client::HttpClient;
 use crate::services::{Data, Service, TaskResult};
 use crate::storage::AppendableLog;
 use crate::Shared;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
-use hyper::Uri;
 use std::fmt::{self, Debug, Display};
 use std::net::SocketAddr;
 use std::process::Stdio;
@@ -128,7 +127,7 @@ impl From<LivenessConfig> for Liveness {
 }
 
 #[derive(Debug)]
-pub(crate) struct HealthcheckService {
+pub struct HealthcheckService {
     shared: Shared,
     spreadsheet_id: String,
     liveness: Vec<Liveness>,
@@ -140,7 +139,7 @@ pub(crate) struct HealthcheckService {
 }
 
 impl HealthcheckService {
-    pub(crate) fn new(shared: Shared, mut config: Healthcheck) -> HealthcheckService {
+    pub fn new(shared: Shared, mut config: Healthcheck) -> HealthcheckService {
         let channel_capacity = scrape_push_rule(&config.liveness, &config.push_interval_secs)
             .expect("assert: push/scrate ratio is validated at configuration");
         let liveness_previous_state = vec![None; config.liveness.len()];
@@ -167,14 +166,9 @@ impl HealthcheckService {
                 match url.scheme_str() {
                     Some("http") | Some("https") => {
                         // we setup a new connection for the checked app each time as a new client would do
-                        // https://docs.rs/hyper/latest/hyper/client/struct.Builder.html
-                        let client = HttpClient::new(
-                            MAX_BYTES_LIVENESS_OUTPUT,
-                            false,
-                            liveness.timeout,
-                            url.clone(),
-                        );
-                        client.get().await
+                        let client =
+                            HttpClient::lousy(MAX_BYTES_LIVENESS_OUTPUT, false, liveness.timeout);
+                        client.get_text(url.clone()).await
                     }
                     _ => Err(format!("unknown url scheme for probe {:?}", liveness)),
                 }
@@ -422,7 +416,8 @@ impl Service for HealthcheckService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::http_client::tests::{run_server, HEALTHY_REPLY, UNHEALTHY_REPLY};
+    use crate::http::tests::{run_test_server, HEALTHY_REPLY, UNHEALTHY_REPLY};
+    use prost::Message;
     use std::net::TcpListener;
     use tokio::sync::mpsc;
 
@@ -489,9 +484,7 @@ mod tests {
 
     #[tokio::test]
     async fn http_probe() {
-        tokio::spawn(async {
-            run_server(53254).await;
-        });
+        let _shut = run_test_server(53254).await;
 
         const NUM_OF_PROBES: usize = 1;
         let (send_notification, mut notifications_receiver) = mpsc::channel(1);
@@ -548,9 +541,7 @@ mod tests {
 
     #[tokio::test]
     async fn http_probe_failure() {
-        tokio::spawn(async {
-            run_server(53255).await;
-        });
+        let _shut = run_test_server(53255).await;
 
         const NUM_OF_PROBES: usize = 2;
         let (send_notification, mut notifications_receiver) = mpsc::channel(NUM_OF_PROBES);
@@ -622,9 +613,9 @@ mod tests {
     async fn http_probe_initial_delay() {
         let delay = Duration::from_millis(50);
         let cloned_delay = delay.clone();
-        tokio::spawn(async move {
+        let _shut = tokio::spawn(async move {
             tokio::time::sleep(cloned_delay).await;
-            run_server(53256).await;
+            run_test_server(53256).await
         });
 
         const NUM_OF_PROBES: usize = 1;
@@ -728,37 +719,56 @@ mod tests {
     }
 
     use tonic::{transport::Server, Request, Response, Status};
-    // test.rs is generated from the proto file
-    // syntax = "proto3";
 
-    // package test;
-
-    // service Test {
-    // rpc call(Input) returns (Output);
-    // }
-
-    // message Input {}
-    // message Output {}
-    mod pb {
-        include!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/services/healthcheck/test.rs"
-        ));
-    }
-
-    #[derive(Default)]
-    pub struct GrpcService {}
-
-    #[tonic::async_trait]
-    impl pb::test_server::Test for GrpcService {
-        async fn call(&self, _request: Request<pb::Input>) -> Result<Response<pb::Output>, Status> {
-            let reply = pb::Output {};
-            Ok(Response::new(reply))
-        }
-    }
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, Message)]
+    pub struct Input {}
+    #[allow(clippy::derive_partial_eq_without_eq)]
+    #[derive(Clone, PartialEq, Message)]
+    pub struct Output {}
 
     #[tokio::test]
     async fn grpc_probe() {
+        let service = tonic_build::manual::Service::builder()
+            .name("Test")
+            .package("grpc_probe_test")
+            .method(
+                tonic_build::manual::Method::builder()
+                    .name("call")
+                    .route_name("call")
+                    .input_type("crate::services::healthcheck::tests::Input")
+                    .output_type("crate::services::healthcheck::tests::Output")
+                    .codec_path("tonic::codec::ProstCodec")
+                    .build(),
+            )
+            .build();
+
+        tonic_build::manual::Builder::new()
+            .out_dir(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/src/services/healthcheck/"
+            ))
+            .build_client(false)
+            .compile(&[service]);
+
+        mod pb {
+            include!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/src/services/healthcheck/grpc_probe_test.Test.rs"
+            ));
+        }
+
+        #[derive(Default)]
+        pub struct GrpcService {}
+
+        #[tonic::async_trait]
+        impl pb::test_server::Test for GrpcService {
+            async fn call(&self, _request: Request<Input>) -> Result<Response<Output>, Status> {
+                let reply = Output {};
+                Ok(Response::new(reply))
+            }
+        }
+
         tokio::spawn(async {
             let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
 

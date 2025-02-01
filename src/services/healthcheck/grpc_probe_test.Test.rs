@@ -1,36 +1,37 @@
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Input {}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Output {}
 /// Generated server implementations.
 pub mod test_server {
-    #![allow(unused_variables, dead_code, missing_docs, clippy::let_unit_value)]
+    #![allow(
+        unused_variables,
+        dead_code,
+        missing_docs,
+        clippy::wildcard_imports,
+        clippy::let_unit_value,
+    )]
     use tonic::codegen::*;
     /// Generated trait containing gRPC methods that should be implemented for use with TestServer.
     #[async_trait]
-    pub trait Test: Send + Sync + 'static {
+    pub trait Test: std::marker::Send + std::marker::Sync + 'static {
         async fn call(
             &self,
-            request: tonic::Request<super::Input>,
-        ) -> std::result::Result<tonic::Response<super::Output>, tonic::Status>;
+            request: tonic::Request<crate::services::healthcheck::tests::Input>,
+        ) -> std::result::Result<
+            tonic::Response<crate::services::healthcheck::tests::Output>,
+            tonic::Status,
+        >;
     }
     #[derive(Debug)]
-    pub struct TestServer<T: Test> {
-        inner: _Inner<T>,
+    pub struct TestServer<T> {
+        inner: Arc<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
         max_decoding_message_size: Option<usize>,
         max_encoding_message_size: Option<usize>,
     }
-    struct _Inner<T>(Arc<T>);
-    impl<T: Test> TestServer<T> {
+    impl<T> TestServer<T> {
         pub fn new(inner: T) -> Self {
             Self::from_arc(Arc::new(inner))
         }
         pub fn from_arc(inner: Arc<T>) -> Self {
-            let inner = _Inner(inner);
             Self {
                 inner,
                 accept_compression_encodings: Default::default(),
@@ -80,8 +81,8 @@ pub mod test_server {
     impl<T, B> tonic::codegen::Service<http::Request<B>> for TestServer<T>
     where
         T: Test,
-        B: Body + Send + 'static,
-        B::Error: Into<StdError> + Send + 'static,
+        B: Body + std::marker::Send + 'static,
+        B::Error: Into<StdError> + std::marker::Send + 'static,
     {
         type Response = http::Response<tonic::body::BoxBody>;
         type Error = std::convert::Infallible;
@@ -93,21 +94,25 @@ pub mod test_server {
             Poll::Ready(Ok(()))
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
-            let inner = self.inner.clone();
             match req.uri().path() {
-                "/test.Test/call" => {
+                "/grpc_probe_test.Test/call" => {
                     #[allow(non_camel_case_types)]
                     struct callSvc<T: Test>(pub Arc<T>);
-                    impl<T: Test> tonic::server::UnaryService<super::Input>
-                    for callSvc<T> {
-                        type Response = super::Output;
+                    impl<
+                        T: Test,
+                    > tonic::server::UnaryService<
+                        crate::services::healthcheck::tests::Input,
+                    > for callSvc<T> {
+                        type Response = crate::services::healthcheck::tests::Output;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::Input>,
+                            request: tonic::Request<
+                                crate::services::healthcheck::tests::Input,
+                            >,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
@@ -122,7 +127,6 @@ pub mod test_server {
                     let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
-                        let inner = inner.0;
                         let method = callSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
@@ -141,20 +145,25 @@ pub mod test_server {
                 }
                 _ => {
                     Box::pin(async move {
-                        Ok(
-                            http::Response::builder()
-                                .status(200)
-                                .header("grpc-status", "12")
-                                .header("content-type", "application/grpc")
-                                .body(empty_body())
-                                .unwrap(),
-                        )
+                        let mut response = http::Response::new(empty_body());
+                        let headers = response.headers_mut();
+                        headers
+                            .insert(
+                                tonic::Status::GRPC_STATUS,
+                                (tonic::Code::Unimplemented as i32).into(),
+                            );
+                        headers
+                            .insert(
+                                http::header::CONTENT_TYPE,
+                                tonic::metadata::GRPC_CONTENT_TYPE,
+                            );
+                        Ok(response)
                     })
                 }
             }
         }
     }
-    impl<T: Test> Clone for TestServer<T> {
+    impl<T> Clone for TestServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -166,17 +175,9 @@ pub mod test_server {
             }
         }
     }
-    impl<T: Test> Clone for _Inner<T> {
-        fn clone(&self) -> Self {
-            Self(Arc::clone(&self.0))
-        }
-    }
-    impl<T: std::fmt::Debug> std::fmt::Debug for _Inner<T> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{:?}", self.0)
-        }
-    }
-    impl<T: Test> tonic::server::NamedService for TestServer<T> {
-        const NAME: &'static str = "test.Test";
+    /// Generated gRPC service name
+    pub const SERVICE_NAME: &str = "grpc_probe_test.Test";
+    impl<T> tonic::server::NamedService for TestServer<T> {
+        const NAME: &'static str = SERVICE_NAME;
     }
 }
