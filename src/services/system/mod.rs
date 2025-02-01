@@ -30,7 +30,7 @@ async fn ssh_versions() -> Result<String, Box<dyn std::error::Error + Send + Syn
     let url = "http://changelogs.ubuntu.com/changelogs/pool/main/o/openssh/"
         .parse()
         .expect("assert: ssh versions url is correct");
-    let client = HttpClient::strict(MAX_BYTES_SSH_VERSIONS_OUTPUT, true);
+    let client = HttpClient::lousy(MAX_BYTES_SSH_VERSIONS_OUTPUT, true, Duration::from_secs(2));
     let res = client.get_text(url).await?;
     Ok(res)
 }

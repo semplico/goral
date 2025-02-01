@@ -39,6 +39,7 @@ struct ProcessInfo {
     disk_write: u64,
     start_time: NaiveDateTime,
     open_files: Option<usize>, // only for Linux and not for all processes
+    is_thread: bool,           // only for Linux
 }
 
 impl ProcessInfo {
@@ -82,6 +83,7 @@ impl ProcessInfo {
             .expect("assert: process start_time timestamp should be valid")
             .naive_local(),
             open_files: open_files(sysinfo_process.pid()),
+            is_thread: sysinfo_process.thread_kind().is_some(),
         }
     }
 }
@@ -118,6 +120,10 @@ fn top_memory_process(processes: &mut [ProcessInfo]) -> &ProcessInfo {
 fn top_open_files_process(processes: &mut [ProcessInfo]) -> Option<&ProcessInfo> {
     processes.sort_unstable_by_key(|p| p.open_files);
     processes.last()
+}
+
+fn processes_then_threads(processes: &mut [ProcessInfo]) {
+    processes.sort_unstable_by_key(|p| (p.is_thread, !p.open_files.is_some()));
 }
 
 fn process_to_values(process: &ProcessInfo, users: &Users) -> Vec<(String, Datavalue)> {
@@ -318,6 +324,7 @@ pub(super) fn collect(
         ));
     }
 
+    processes_then_threads(&mut processes_infos);
     for name in names {
         if let Some(p) = processes_infos.iter().find(|p| p.name.contains(name)) {
             datarows.push(Datarow::new(

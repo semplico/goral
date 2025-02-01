@@ -34,7 +34,7 @@ With this configuration System service will create the following sheets:
 * `top_disk_write` - process which has written the most to disk _during the last second_
 * `top_cpu` - process with the most cpu time during the last second
 * `top_memory` - process with the most memory usage _during the last second_
-* `top_open_files` (for Linux only) - among the processes with the same user as Goral (!) - process with the most opened files
+* `top_open_files` (for Linux only) - among the processes with the same user as Goral (!) - process with the most opened files (files in a Linux sense - includes also sockets, pipes etc)
 * for every process with name containing one of the substrings in `names` - a sheet with process info. Note: the first match (_case sensitive_) is used so plan accordingly a unique name for your binary.
 * for every mount in `mounts` - disk usage and free space.
 * `ssh` - for Linux systems ssh access log is monitored. There is a `status` field with the following values:
