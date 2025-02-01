@@ -44,7 +44,7 @@ serde = { version = "^1.0", default-features = false}
 serde_derive = { version = "^1.0", default-features = false}
 serde_json = { version = "^1.0", default-features = false}
 serde_valid = { version = "1.0", default-features = false, features = ["toml"] }
-sysinfo = { version = "0.33", default-features = false, features = ["system", "network", "user"] }
+sysinfo = { version = "0.33", default-features = false, features = ["system", "network", "user", "disk"] }
 tokio = { version = "^1.43", default-features = false, features = ["sync", "signal", "io-std", "process", "net"] }
 tonic = { version = "^0.12", default-features = false, features = ["transport", "prost"]}
 tonic-health = { version = "0.12", default-features = false, features = ["transport"]}
