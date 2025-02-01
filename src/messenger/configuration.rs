@@ -27,7 +27,7 @@ fn messenger_implementation_host_rule(
     Ok(())
 }
 
-#[derive(Deserialize, Clone, Validate, PartialEq)]
+#[derive(Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum MessengerImplementation {
     Slack { token: String, channel: String },
