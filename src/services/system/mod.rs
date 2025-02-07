@@ -106,7 +106,7 @@ impl SystemService {
                             return;
                         }
                         panic!(
-                            "assert: ssh update checker recepient shouldn't be closed before shutdown signal"
+                            "assert: ssh update checker recipient shouldn't be closed before shutdown signal"
                         );
                     }
                 }
@@ -119,7 +119,7 @@ impl SystemService {
                             return;
                         }
                         panic!(
-                            "assert: os name recepient shouldn't be closed before shutdown signal"
+                            "assert: os name recipient shouldn't be closed before shutdown signal"
                         );
                     }
                 }
@@ -132,7 +132,7 @@ impl SystemService {
                             return;
                         }
                         panic!(
-                            "assert: system support check recepient shouldn't be closed before shutdown signal"
+                            "assert: system support check recipient shouldn't be closed before shutdown signal"
                         );
                     }
                 }
@@ -622,7 +622,7 @@ mod tests {
                 panic!("test assert: memory use should be scraped");
             }
         } else {
-            panic!("test assert: at least one successfull scrape should be collected");
+            panic!("test assert: at least one successful scrape should be collected");
         }
 
         scrape_handle.await.unwrap(); // scrape should finish as the data channel is closed

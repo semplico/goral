@@ -389,6 +389,7 @@ impl From<Datarow> for RowData {
 }
 
 impl From<Datarow> for RuleApplicant {
+    // TODO convert only data, which is actually used in rules processing
     fn from(val: Datarow) -> Self {
         use Datavalue::*;
         let Datarow {

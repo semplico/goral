@@ -423,7 +423,7 @@ mod tests {
                 Some(&Datavalue::Text("all".to_string()))
             );
         } else {
-            panic!("test assert: at least one successfull scrape should be collected");
+            panic!("test assert: at least one successful scrape should be collected");
         }
 
         scrape_handle.await.unwrap(); // scrape should finish as the data channel is closed

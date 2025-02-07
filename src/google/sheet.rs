@@ -702,26 +702,26 @@ pub mod tests {
         }
         let mut collisions = HashSet::new();
         let mut num_of_collisions = 0;
-        let mut num_of_dublicates = 0; // how many objects would be rejected
+        let mut num_of_duplicates = 0; // how many objects would be rejected
         for (_, count) in counts {
             if count == 1 {
                 continue;
             }
             num_of_collisions += count;
-            num_of_dublicates += count - 1;
+            num_of_duplicates += count - 1;
             collisions.insert(count);
         }
         // Example for 10_000_000 objects
-        // num_of_collisions 46771, 0.47%, num_of_dublicates: 23402
+        // num_of_collisions 46771, 0.47%, num_of_duplicates: 23402
         // collisions numbers {3, 4, 2}
         let share = 100.0 * num_of_collisions as f64 / total as f64;
         println!(
-            "num_of_collisions {}, {:.2}%, num_of_dublicates: {}\n{:?}",
-            num_of_collisions, share, num_of_dublicates, collisions
+            "num_of_collisions {}, {:.2}%, num_of_duplicates: {}\n{:?}",
+            num_of_collisions, share, num_of_duplicates, collisions
         );
         assert!(
             share < 0.000001,
-            "collisions are highly unprobable for usual cases"
+            "collisions are highly improbable for usual cases"
         );
     }
 }

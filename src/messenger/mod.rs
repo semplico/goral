@@ -16,7 +16,7 @@ pub type BoxedMessenger = Box<dyn Messenger + Sync + Send>;
 
 #[async_trait]
 pub trait Messenger {
-    // when implementing info, consider supressing mesenger's notifications for it
+    // when implementing info, consider suppressing mesenger's notifications for it
     // if the messenger allows
     async fn send_info(&self, config: &MessengerConfig, markdown: &str) -> Result<()>;
     async fn send_warning(&self, config: &MessengerConfig, markdown: &str) -> Result<()>;

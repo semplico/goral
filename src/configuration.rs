@@ -18,9 +18,9 @@ use url::{Host, Url};
 pub const APP_NAME: &str = "GORAL";
 pub const GOOGLE_SHEET_BASE: &str = "https://docs.google.com/spreadsheets/d/";
 
-pub fn ceiled_division(divisable: u16, divisor: u16) -> u16 {
-    let quotient = divisable / divisor;
-    let remainder = divisable % divisor;
+pub fn ceiled_division(divisible: u16, divisor: u16) -> u16 {
+    let quotient = divisible / divisor;
+    let remainder = divisible % divisor;
     if remainder == 0 {
         quotient
     } else {

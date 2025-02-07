@@ -245,7 +245,7 @@ mod tests {
     }
 
     #[test]
-    fn case_insentive_liveness_typ() {
+    fn case_insensitive_liveness_typ() {
         let config = r#"
         spreadsheet_id = "123"
         [[liveness]]

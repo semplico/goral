@@ -153,11 +153,11 @@ impl Service for GeneralService {
         tokio::select! {
             result = shutdown.recv() => {
                 let graceful_shutdown_timeout = match result {
-                    Err(_) => panic!("assert: shutdown signal sender should be dropped after all service listeneres"),
+                    Err(_) => panic!("assert: shutdown signal sender should be dropped after all service listeners"),
                     Ok(graceful_shutdown_timeout) => graceful_shutdown_timeout,
                 };
                 tracing::info!("{} service has got shutdown signal", GENERAL_SERVICE_NAME);
-                // we read out messages from other services and componens as much as we can (so we don't close the channel)
+                // we read out messages from other services and components as much as we can (so we don't close the channel)
                 assert!(graceful_shutdown_timeout > 0, "graceful_shutdown_timeout is validated in configuration to be positive");
                 let graceful_shutdown_timeout = graceful_shutdown_timeout - 1;
                 tokio::select! {

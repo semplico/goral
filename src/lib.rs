@@ -252,7 +252,7 @@ pub async fn welcome(
     .expect("assert: should be able to collect basic system info");
     let version = env!("CARGO_PKG_VERSION");
     let msg = format!(
-        "`{APP_NAME} v{version}` has started with [api usage page](https://console.cloud.google.com/apis/dashboard?project={project_id}&show=all) and [api quota page](https://console.cloud.google.com/iam-admin/quotas?project={project_id}) at `{sys}`", 
+        "{APP_NAME} `v{version}` has started with [api usage page](https://console.cloud.google.com/apis/dashboard?project={project_id}&show=all) and [api quota page](https://console.cloud.google.com/iam-admin/quotas?project={project_id}) at `{sys}`", 
     );
     send_notification.info(msg).await;
     if let Err(truncation_check) = truncation_check {

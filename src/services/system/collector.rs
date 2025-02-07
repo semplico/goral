@@ -206,6 +206,7 @@ pub struct SystemInfo {
     pub total_memory: u64,
 }
 
+// TODO cpu_arch(), boot_time()
 pub fn system_info() -> SystemInfo {
     let sys = initialize();
     SystemInfo {
@@ -448,4 +449,45 @@ fn disk_stat(
         ));
     }
     datarows
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::configuration::APP_NAME;
+    use chrono::Utc;
+    use tokio::sync::mpsc;
+
+    #[global_allocator]
+    static ALLOC: dhat::Alloc = dhat::Alloc;
+
+    #[test]
+    fn test_collector_memory_profile() {
+        let _profiler = dhat::Profiler::builder().testing().build();
+
+        {
+            let mounts = ["/".to_string()];
+            let names = [APP_NAME.to_lowercase()];
+            let (tx, mut rx) = mpsc::channel(1);
+            let messenger = Sender::new(tx, "collector");
+            let mut sys = initialize();
+            for _ in 0..10 {
+                let scrape_time = Utc::now();
+                println!("sys measurement at {scrape_time:?}");
+                let _ = collect(
+                    &mut sys,
+                    &mounts,
+                    &names,
+                    scrape_time.naive_utc(),
+                    &messenger,
+                );
+                thread::sleep(Duration::from_secs(1));
+            }
+        }
+        let stats = dhat::HeapStats::get();
+
+        // Now a single allocation remains alive.
+        dhat::assert_eq!(stats.curr_blocks, 0);
+        dhat::assert_eq!(stats.curr_bytes, 0);
+    }
 }

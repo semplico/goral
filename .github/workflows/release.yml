@@ -86,6 +86,9 @@ jobs:
         run: |
           cargo fmt --all -- --check
 
+      - name: Check typos
+        uses: crate-ci/typos@master
+
       - name: Run clippy
         shell: bash
         run: |

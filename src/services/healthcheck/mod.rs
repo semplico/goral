@@ -532,7 +532,7 @@ mod tests {
                 Some(&Datavalue::Text(HEALTHY_REPLY.to_string()))
             );
         } else {
-            panic!("test assert: at least one successfull probe should be collected");
+            panic!("test assert: at least one successful probe should be collected");
         }
 
         checker_handle.await.unwrap(); // checker should finish as the data channel is closed
@@ -589,7 +589,7 @@ mod tests {
                 Some(&Datavalue::Text(UNHEALTHY_REPLY.to_string()))
             );
         } else {
-            panic!("test assert: at least one unsuccessfull probe should be collected");
+            panic!("test assert: at least one unsuccessful probe should be collected");
         }
 
         if let Some(TaskResult {
@@ -602,7 +602,7 @@ mod tests {
                 Some(&Datavalue::Text(UNHEALTHY_REPLY.to_string()))
             );
         } else {
-            panic!("test assert: second unsuccessfull probe should be collected");
+            panic!("test assert: second unsuccessful probe should be collected");
         }
 
         checker_handle.await.unwrap(); // checker should finish as the data channel is closed
@@ -669,7 +669,7 @@ mod tests {
             };
             assert!(latency < 100);
         } else {
-            panic!("test assert: at least one successfull probe should be collected");
+            panic!("test assert: at least one successful probe should be collected");
         }
 
         checker_handle.await.unwrap(); // checker should finish as the data channel is closed

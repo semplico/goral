@@ -374,7 +374,7 @@ impl Service for KvService {
                     is_shutdown.store(true, Ordering::Release);
                     data_receiver.close(); // stop tasks
                     let graceful_shutdown_timeout = match result {
-                        Err(_) => panic!("assert: shutdown signal sender should be dropped after all service listeneres"),
+                        Err(_) => panic!("assert: shutdown signal sender should be dropped after all service listeners"),
                         Ok(graceful_shutdown_timeout) => graceful_shutdown_timeout,
                     };
                     tracing::info!("{} service has got shutdown signal", self.name());

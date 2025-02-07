@@ -3,3 +3,4 @@ architecture
 service_account.json
 /examples
 .github/site/book
+config.toml

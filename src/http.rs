@@ -114,6 +114,7 @@ impl HttpClient {
         self.request(url, Method::POST, headers, req_body).await
     }
 
+    // TODO generalize on header value to allow static strs
     async fn request(
         &self,
         url: Uri,
@@ -133,6 +134,7 @@ impl HttpClient {
         tracing::debug!("{:?}", request);
         let mut res = self.client.request(request).await?;
         let mut size = 0;
+        // TODO allocate vector with capacity from the header content-length
         let mut body = vec![];
         while size < self.body_max_size {
             if let Some(next) = res.frame().await {
