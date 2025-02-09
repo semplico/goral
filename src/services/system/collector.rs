@@ -4,7 +4,7 @@ use chrono::{DateTime, NaiveDateTime};
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
-use sysinfo::{Networks, Pid, Process as SysinfoProcess, ProcessesToUpdate, System, Uid, Users};
+use sysinfo::{Networks, Pid, Process as SysinfoProcess, System, Uid, Users};
 use tracing::Level;
 
 pub const BASIC_LOG: &str = "basic";
@@ -56,7 +56,7 @@ impl ProcessInfo {
                 .to_string_lossy()
                 .into_owned()
         } else {
-            sysinfo_process.name().to_string_lossy().to_string()
+            sysinfo_process.name().to_string()
         };
 
         Self {
@@ -194,7 +194,7 @@ pub(super) fn initialize() -> System {
     sysinfo::set_open_files_limit(0);
     let mut sys = System::new();
     sys.refresh_memory();
-    sys.refresh_processes(ProcessesToUpdate::All, true); // true means remove dead processes
+    sys.refresh_processes();
     sys
 }
 
