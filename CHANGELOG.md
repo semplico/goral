@@ -1,5 +1,5 @@
 * 0.1.10
-    * upgrade all dependencies
+    * upgrade all dependencies (except sysinfo)
     * refactor http client and server usage
 
 * 0.1.9
