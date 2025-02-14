@@ -1,11 +1,11 @@
-pub(crate) mod configuration;
+pub mod configuration;
 
 use crate::configuration::APP_NAME;
+use crate::http::HttpClient;
 use crate::messenger::configuration::MessengerConfig;
 use crate::messenger::BoxedMessenger;
 use crate::notifications::{Notification, Sender};
 use crate::services::general::configuration::General;
-use crate::services::http_client::HttpClient;
 use crate::services::Service;
 use crate::storage::AppendableLog;
 use crate::Shared;
@@ -30,8 +30,8 @@ async fn latest_release() -> Result<GithubRelease, Box<dyn std::error::Error + S
     let url = "https://api.github.com/repos/maksimryndin/goral/releases/latest"
         .parse()
         .expect("assert: latest release url is correct");
-    let client = HttpClient::new(32768, true, Duration::from_millis(1000), url);
-    let res = client.get().await?;
+    let client = HttpClient::strict(32768, true);
+    let res = client.get_text(url).await?;
     Ok(serde_json::from_str(&res)?)
 }
 
@@ -65,7 +65,7 @@ async fn release_check(send_notification: Sender) {
 }
 
 #[derive(Debug)]
-pub(crate) struct GeneralService {
+pub struct GeneralService {
     shared: Shared,
     messenger_config: MessengerConfig,
     log_level: Level,
@@ -73,11 +73,7 @@ pub(crate) struct GeneralService {
 }
 
 impl GeneralService {
-    pub(crate) fn new(
-        shared: Shared,
-        config: General,
-        channel: Receiver<Notification>,
-    ) -> GeneralService {
+    pub fn new(shared: Shared, config: General, channel: Receiver<Notification>) -> GeneralService {
         Self {
             shared,
             messenger_config: config.messenger,
@@ -157,11 +153,11 @@ impl Service for GeneralService {
         tokio::select! {
             result = shutdown.recv() => {
                 let graceful_shutdown_timeout = match result {
-                    Err(_) => panic!("assert: shutdown signal sender should be dropped after all service listeneres"),
+                    Err(_) => panic!("assert: shutdown signal sender should be dropped after all service listeners"),
                     Ok(graceful_shutdown_timeout) => graceful_shutdown_timeout,
                 };
                 tracing::info!("{} service has got shutdown signal", GENERAL_SERVICE_NAME);
-                // we read out messages from other services and componens as much as we can (so we don't close the channel)
+                // we read out messages from other services and components as much as we can (so we don't close the channel)
                 assert!(graceful_shutdown_timeout > 0, "graceful_shutdown_timeout is validated in configuration to be positive");
                 let graceful_shutdown_timeout = graceful_shutdown_timeout - 1;
                 tokio::select! {

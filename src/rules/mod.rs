@@ -43,7 +43,7 @@ pub const ERROR_ACTION: &str = "error";
 pub const SKIP_ACTION: &str = "skip further rules";
 pub const ACTIONS: [&str; 4] = [INFO_ACTION, WARN_ACTION, ERROR_ACTION, SKIP_ACTION];
 
-pub(crate) fn rules_dropdowns() -> Vec<Dropdown> {
+pub fn rules_dropdowns() -> Vec<Dropdown> {
     vec![
         Dropdown {
             column_index: 3,
@@ -57,7 +57,7 @@ pub(crate) fn rules_dropdowns() -> Vec<Dropdown> {
 }
 
 #[derive(Debug)]
-pub(crate) enum RuleCondition {
+pub enum RuleCondition {
     Less,
     Greater,
     Is,
@@ -97,7 +97,7 @@ impl<'a> TryFrom<&'a str> for RuleCondition {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Action {
+pub enum Action {
     Info,
     Warn,
     Error,
@@ -132,11 +132,11 @@ impl<'a> TryFrom<&'a str> for Action {
 
 #[derive(Debug)]
 pub struct Rule {
-    pub(crate) log_name: String,
-    pub(crate) key: String,
-    pub(crate) condition: RuleCondition,
-    pub(crate) value: Datavalue,
-    pub(crate) action: Action,
+    pub log_name: String,
+    pub key: String,
+    pub condition: RuleCondition,
+    pub value: Datavalue,
+    pub action: Action,
 }
 
 impl fmt::Display for Rule {
@@ -174,7 +174,7 @@ impl fmt::Display for Rule {
 }
 
 impl Rule {
-    pub(crate) fn try_from_values(row: Vec<Value>, messenger: Option<&Sender>) -> Option<Self> {
+    pub fn try_from_values(row: Vec<Value>, messenger: Option<&Sender>) -> Option<Self> {
         if row.len() != 6 {
             // Rule fields + timestamp which is first
             return None;
@@ -236,7 +236,7 @@ impl Rule {
         })
     }
 
-    pub(crate) fn apply(&self, candidate: &RuleApplicant) -> RuleOutput {
+    pub fn apply(&self, candidate: &RuleApplicant) -> RuleOutput {
         use RuleCondition::*;
 
         if candidate.log_name != self.log_name {
@@ -356,23 +356,23 @@ impl From<Rule> for Datarow {
 }
 
 #[derive(Debug)]
-pub(crate) struct RuleApplicant {
-    pub(crate) log_name: String,
-    pub(crate) data: HashMap<String, Datavalue>,
-    pub(crate) sheet_id: SheetId,
+pub struct RuleApplicant {
+    pub log_name: String,
+    pub data: HashMap<String, Datavalue>,
+    pub sheet_id: SheetId,
 }
 
 #[derive(Debug)]
-pub(crate) enum RuleOutput {
+pub enum RuleOutput {
     Process(Option<Triggered>),
     SkipFurtherRules,
 }
 
 #[derive(Debug)]
 pub struct Triggered {
-    pub(crate) message: String,
-    pub(crate) action: Action,
-    pub(crate) sheet_id: SheetId,
+    pub message: String,
+    pub action: Action,
+    pub sheet_id: SheetId,
 }
 
 #[cfg(test)]

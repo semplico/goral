@@ -7,12 +7,12 @@ use tracing::Level;
 
 #[derive(Debug)]
 pub struct Notification {
-    pub(crate) message: String,
-    pub(crate) level: Level,
+    pub message: String,
+    pub level: Level,
 }
 
 impl Notification {
-    pub(crate) fn new(message: String, level: Level) -> Self {
+    pub fn new(message: String, level: Level) -> Self {
         Self { message, level }
     }
 }
@@ -97,7 +97,7 @@ impl Sender {
     }
 }
 
-pub(crate) fn setup_messenger_channel(service: &'static str) -> (Sender, Receiver<Notification>) {
+pub fn setup_messenger_channel(service: &'static str) -> (Sender, Receiver<Notification>) {
     let (tx, rx) = mpsc::channel(60); // 60 simultaneous messages is enough for any rate limiting messenger
     let tx = Sender::new(tx, service);
     (tx, rx)
@@ -108,14 +108,14 @@ pub fn setup_general_messenger_channel() -> (Sender, Receiver<Notification>) {
 }
 
 #[derive(Debug)]
-pub(crate) struct MessengerApi {
-    pub(crate) config: MessengerConfig,
-    pub(crate) message_tx: Sender,
-    pub(crate) message_rx: Option<Receiver<Notification>>,
+pub struct MessengerApi {
+    pub config: MessengerConfig,
+    pub message_tx: Sender,
+    pub message_rx: Option<Receiver<Notification>>,
 }
 
 impl MessengerApi {
-    pub(crate) fn new(config: MessengerConfig, service: &'static str) -> Self {
+    pub fn new(config: MessengerConfig, service: &'static str) -> Self {
         let (message_tx, message_rx) = setup_messenger_channel(service);
         Self {
             config,

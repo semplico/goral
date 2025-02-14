@@ -1,26 +1,17 @@
+use crate::http::HttpClient;
 use crate::messenger::configuration::{MessengerConfig, MessengerImplementation};
 use crate::messenger::Messenger;
-use crate::HttpsClient;
 use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
-use hyper::{Body, Method, Request};
 use serde_derive::Serialize;
 
-pub(crate) struct Telegram {
-    client: HttpsClient,
+pub struct Telegram {
+    client: HttpClient,
 }
 
 impl Telegram {
-    pub(crate) fn new() -> Self {
-        let client: HttpsClient = hyper::Client::builder().build(
-            hyper_rustls::HttpsConnectorBuilder::new()
-                .with_native_roots()
-                .expect("assert: can build telegram client with native root certs")
-                .https_only()
-                .enable_http1()
-                .build(),
-        );
+    pub fn new(client: HttpClient) -> Self {
         Self { client }
     }
 
@@ -36,14 +27,9 @@ impl Telegram {
         };
         let mut url = config.url.clone();
         url.query_pairs_mut().clear();
+        let url = url.as_str().parse()?;
         let body = TelegramRequestBody::new(chat_id, markdown, disable_notification);
-        let req = Request::builder()
-            .method(Method::POST)
-            .uri(url.as_str())
-            .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_string(&body)?))?;
-        tracing::debug!("{:?}", req);
-        let resp = self.client.request(req).await?;
+        let (_, resp) = self.client.post_json(url, vec![], &body).await?;
         tracing::debug!("{:?}", resp);
         if resp.status() == 400 {
             tracing::error!(

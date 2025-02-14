@@ -1,9 +1,9 @@
-pub(crate) mod configuration;
+pub mod configuration;
 
 use crate::google::datavalue::{Datarow, Datavalue};
+use crate::http::{HttpClient, Uri};
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{MessengerApi, Notification, Sender};
-use crate::services::http_client::HttpClient;
 use crate::services::metrics::configuration::{scrape_push_rule, Metrics};
 use crate::services::{Data, Service, TaskResult};
 use crate::storage::AppendableLog;
@@ -11,7 +11,6 @@ use crate::Shared;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
-use hyper::Uri;
 use prometheus_parse::{Sample, Scrape, Value};
 use std::cmp::Ordering as Cmp;
 use std::collections::HashMap;
@@ -42,7 +41,7 @@ impl ScrapeTarget {
     }
 }
 
-pub(crate) struct MetricsService {
+pub struct MetricsService {
     shared: Shared,
     messenger: Option<MessengerApi>,
     spreadsheet_id: String,
@@ -53,7 +52,7 @@ pub(crate) struct MetricsService {
 }
 
 impl MetricsService {
-    pub(crate) fn new(shared: Shared, mut config: Metrics) -> MetricsService {
+    pub fn new(shared: Shared, mut config: Metrics) -> MetricsService {
         let channel_capacity = scrape_push_rule(
             &config.target,
             &config.push_interval_secs,
@@ -218,7 +217,7 @@ impl MetricsService {
     ) -> StdResult<String, String> {
         tokio::select! {
             _ = tokio::time::sleep(target.timeout) => Err(format!("scrape timeout {:?} for {}", target.timeout, target.url)),
-            res = client.get() => res
+            res = client.get_text(target.url.clone()) => res
         }
     }
 
@@ -350,8 +349,7 @@ impl Service for MetricsService {
                 let sender = sender.clone();
                 let scrape_target = t.clone();
                 let is_shutdown = is_shutdown.clone();
-                let client =
-                    HttpClient::new(MAX_BYTES_METRICS_OUTPUT, true, t.interval, t.url.clone());
+                let client = HttpClient::lousy(MAX_BYTES_METRICS_OUTPUT, true, t.interval);
                 let send_notification = self.shared.send_notification.clone();
                 tokio::spawn(async move {
                     Self::run_scrape(
@@ -371,13 +369,11 @@ impl Service for MetricsService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::http_client::tests::run_server;
+    use crate::http::tests::run_test_server;
 
     #[tokio::test]
     async fn single_metrics_scrape() {
-        tokio::spawn(async {
-            run_server(53270).await;
-        });
+        let _shut = run_test_server(53270).await;
 
         const NUM_OF_SCRAPES: usize = 1;
         let (send_notification, mut notifications_receiver) = mpsc::channel(1);
@@ -393,12 +389,7 @@ mod tests {
             interval: Duration::from_secs(1),
         };
 
-        let client = HttpClient::new(
-            MAX_BYTES_METRICS_OUTPUT,
-            true,
-            target.interval,
-            target.url.clone(),
-        );
+        let client = HttpClient::lousy(MAX_BYTES_METRICS_OUTPUT, true, target.interval);
 
         let notifications = tokio::spawn(async move {
             while let Some(notification) = notifications_receiver.recv().await {
@@ -432,7 +423,7 @@ mod tests {
                 Some(&Datavalue::Text("all".to_string()))
             );
         } else {
-            panic!("test assert: at least one successfull scrape should be collected");
+            panic!("test assert: at least one successful scrape should be collected");
         }
 
         scrape_handle.await.unwrap(); // scrape should finish as the data channel is closed
@@ -441,9 +432,7 @@ mod tests {
 
     #[tokio::test]
     async fn metrics_scrape_timeout() {
-        tokio::spawn(async {
-            run_server(53271).await;
-        });
+        let _shut = run_test_server(53271).await;
 
         const NUM_OF_SCRAPES: usize = 1;
         let (send_notification, mut notifications_receiver) = mpsc::channel(1);
@@ -459,12 +448,7 @@ mod tests {
             interval: Duration::from_secs(1),
         };
 
-        let client = HttpClient::new(
-            MAX_BYTES_METRICS_OUTPUT,
-            true,
-            target.interval,
-            target.url.clone(),
-        );
+        let client = HttpClient::lousy(MAX_BYTES_METRICS_OUTPUT, true, target.interval);
 
         let notifications = tokio::spawn(async move {
             while let Some(notification) = notifications_receiver.recv().await {

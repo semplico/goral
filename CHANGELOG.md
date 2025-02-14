@@ -1,3 +1,7 @@
+* 0.1.10
+    * upgrade all dependencies (except sysinfo)
+    * refactor http client and server usage
+
 * 0.1.9
     * reorder system logs fields for charts
     * ssh versions checks (for ubuntu)

@@ -1,29 +1,20 @@
+use crate::http::HttpClient;
 use crate::messenger::configuration::{MessengerConfig, MessengerImplementation};
 use crate::messenger::Messenger;
-use crate::HttpsClient;
 use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
-use hyper::{Body, Method, Request};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde_derive::Serialize;
 use std::borrow::Cow;
 
-pub(crate) struct Slack {
-    client: HttpsClient,
+pub struct Slack {
+    client: HttpClient,
 }
 
 impl Slack {
-    pub(crate) fn new() -> Self {
-        let client: HttpsClient = hyper::Client::builder().build(
-            hyper_rustls::HttpsConnectorBuilder::new()
-                .with_native_roots()
-                .expect("assert: can build slack client with native root certs")
-                .https_only()
-                .enable_http1()
-                .build(),
-        );
+    pub fn new(client: HttpClient) -> Self {
         Self { client }
     }
 
@@ -33,15 +24,16 @@ impl Slack {
             _ => panic!("assert: messenger implementation should be validated at configuration"),
         };
         let processed = process_links(markdown);
+        let url = config.url.as_str().parse()?;
         let body = SlackRequestBody::new(channel, &processed);
-        let req = Request::builder()
-            .method(Method::POST)
-            .uri(config.url.as_str())
-            .header("content-type", "application/json")
-            .header("authorization", format!("Bearer {}", token))
-            .body(Body::from(serde_json::to_string(&body)?))?;
-        tracing::debug!("{:?}", req);
-        let resp = self.client.request(req).await?;
+        let (_, resp) = self
+            .client
+            .post_json(
+                url,
+                vec![("authorization", format!("Bearer {}", token))],
+                &body,
+            )
+            .await?;
         tracing::debug!("{:?}", resp);
         if resp.status() != 200 {
             tracing::error!("slack error response {:?}", resp);

@@ -35,25 +35,25 @@ fn autotruncate_at_usage_percent() -> f32 {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[rule(if_contains(filter_if_contains, drop_if_contains))]
+#[validate(custom = |s| if_contains(&s.filter_if_contains, &s.drop_if_contains))]
 #[serde(deny_unknown_fields)]
 #[allow(unused)]
-pub(crate) struct Logs {
-    pub(crate) spreadsheet_id: String,
+pub struct Logs {
+    pub spreadsheet_id: String,
     #[validate]
-    pub(crate) messenger: Option<MessengerConfig>,
+    pub messenger: Option<MessengerConfig>,
     #[validate(maximum = 10)]
     #[validate(minimum = 3)]
     #[serde(default = "logs_push_interval_secs")]
-    pub(crate) push_interval_secs: u16,
+    pub push_interval_secs: u16,
     #[validate(min_items = 1)]
-    pub(crate) filter_if_contains: Option<Vec<String>>,
+    pub filter_if_contains: Option<Vec<String>>,
     #[validate(min_items = 1)]
-    pub(crate) drop_if_contains: Option<Vec<String>>,
+    pub drop_if_contains: Option<Vec<String>>,
     #[validate(minimum = 0.0)]
     #[validate(maximum = 100.0)]
     #[serde(default = "autotruncate_at_usage_percent")]
-    pub(crate) autotruncate_at_usage_percent: f32,
+    pub autotruncate_at_usage_percent: f32,
 }
 
 #[cfg(test)]

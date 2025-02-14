@@ -1,9 +1,9 @@
-pub(crate) mod collector;
-pub(crate) mod configuration;
+pub mod collector;
+pub mod configuration;
 #[cfg(target_os = "linux")]
-pub(crate) mod ssh;
+pub mod ssh;
 use crate::google::datavalue::{Datarow, Datavalue};
-use crate::http_client::HttpClient;
+use crate::http::HttpClient;
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{MessengerApi, Notification, Sender};
 use crate::rules::{Action, Rule, RuleCondition};
@@ -30,13 +30,8 @@ async fn ssh_versions() -> Result<String, Box<dyn std::error::Error + Send + Syn
     let url = "http://changelogs.ubuntu.com/changelogs/pool/main/o/openssh/"
         .parse()
         .expect("assert: ssh versions url is correct");
-    let client = HttpClient::new(
-        MAX_BYTES_SSH_VERSIONS_OUTPUT,
-        true,
-        Duration::from_millis(1000),
-        url,
-    );
-    let res = client.get().await?;
+    let client = HttpClient::lousy(MAX_BYTES_SSH_VERSIONS_OUTPUT, true, Duration::from_secs(2));
+    let res = client.get_text(url).await?;
     Ok(res)
 }
 
@@ -50,7 +45,7 @@ enum SystemInfoRequest {
     IsSupported(oneshot::Sender<Result<bool, String>>),
 }
 
-pub(crate) struct SystemService {
+pub struct SystemService {
     shared: Shared,
     spreadsheet_id: String,
     push_interval: Duration,
@@ -64,7 +59,7 @@ pub(crate) struct SystemService {
 }
 
 impl SystemService {
-    pub(crate) fn new(shared: Shared, mut config: System) -> SystemService {
+    pub fn new(shared: Shared, mut config: System) -> SystemService {
         let channel_capacity = scrape_push_rule(
             &config.scrape_timeout_ms,
             &config.scrape_interval_secs,
@@ -111,7 +106,7 @@ impl SystemService {
                             return;
                         }
                         panic!(
-                            "assert: ssh update checker recepient shouldn't be closed before shutdown signal"
+                            "assert: ssh update checker recipient shouldn't be closed before shutdown signal"
                         );
                     }
                 }
@@ -124,7 +119,7 @@ impl SystemService {
                             return;
                         }
                         panic!(
-                            "assert: os name recepient shouldn't be closed before shutdown signal"
+                            "assert: os name recipient shouldn't be closed before shutdown signal"
                         );
                     }
                 }
@@ -137,7 +132,7 @@ impl SystemService {
                             return;
                         }
                         panic!(
-                            "assert: system support check recepient shouldn't be closed before shutdown signal"
+                            "assert: system support check recipient shouldn't be closed before shutdown signal"
                         );
                     }
                 }
@@ -627,7 +622,7 @@ mod tests {
                 panic!("test assert: memory use should be scraped");
             }
         } else {
-            panic!("test assert: at least one successfull scrape should be collected");
+            panic!("test assert: at least one successful scrape should be collected");
         }
 
         scrape_handle.await.unwrap(); // scrape should finish as the data channel is closed

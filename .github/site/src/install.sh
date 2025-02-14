@@ -21,7 +21,7 @@ main() {
 
     get_architecture || return 1
     local _arch="$RETVAL"
-    local _version=${1:-'0.1.9'}
+    local _version=${1:-'0.1.10'}
     assert_nz "$_arch" "arch"
 
     local _file="goral-${_version}-${_arch}"

@@ -54,6 +54,14 @@ fn timeout_period_rule(
     Ok(())
 }
 
+pub(super) fn scrape_push_rule_validate(
+    liveness: &Vec<Liveness>,
+    push_interval_secs: &u16,
+) -> Result<(), serde_valid::validation::Error> {
+    scrape_push_rule(liveness, push_interval_secs)?;
+    Ok(())
+}
+
 pub(super) fn scrape_push_rule(
     liveness: &Vec<Liveness>,
     push_interval_secs: &u16,
@@ -107,7 +115,7 @@ fn liveness_timeout_ms() -> u32 {
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Validate)]
-pub(crate) enum LivenessType {
+pub enum LivenessType {
     Http,
     Tcp,
     Command,
@@ -146,46 +154,46 @@ fn autotruncate_at_usage_percent() -> f32 {
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[rule(liveness_rule(endpoint, command, typ))]
-#[rule(timeout_period_rule(period_secs, timeout_ms))]
+#[validate(custom = |s| liveness_rule(&s.endpoint, &s.command, &s.typ))]
+#[validate(custom = |s| timeout_period_rule(&s.period_secs, &s.timeout_ms))]
 #[serde(deny_unknown_fields)]
-pub(crate) struct Liveness {
+pub struct Liveness {
     #[validate(custom(log_name_opt))]
     #[validate(min_length = 1)]
-    pub(crate) name: Option<String>,
+    pub name: Option<String>,
     #[serde(default)]
-    pub(crate) initial_delay_secs: u16,
+    pub initial_delay_secs: u16,
     #[validate(minimum = 1)]
     #[serde(default = "liveness_period_secs")]
-    pub(crate) period_secs: u16,
+    pub period_secs: u16,
     #[validate(minimum = 1)]
     #[serde(default = "liveness_timeout_ms")]
-    pub(crate) timeout_ms: u32,
-    pub(crate) endpoint: Option<String>,
+    pub timeout_ms: u32,
+    pub endpoint: Option<String>,
     #[validate(min_items = 1)]
-    pub(crate) command: Option<Vec<String>>,
+    pub command: Option<Vec<String>>,
     #[serde(rename(deserialize = "type"))]
     #[serde(deserialize_with = "case_insensitive_enum")]
-    pub(crate) typ: LivenessType,
+    pub typ: LivenessType,
 }
 
 #[derive(Debug, Deserialize, Validate)]
-#[rule(scrape_push_rule(liveness, push_interval_secs))]
+#[validate(custom = |s| scrape_push_rule_validate(&s.liveness, &s.push_interval_secs))]
 #[serde(deny_unknown_fields)]
-pub(crate) struct Healthcheck {
+pub struct Healthcheck {
     #[validate]
-    pub(crate) messenger: Option<MessengerConfig>,
-    pub(crate) spreadsheet_id: String,
+    pub messenger: Option<MessengerConfig>,
+    pub spreadsheet_id: String,
     #[validate]
     #[validate(min_items = 1)]
-    pub(crate) liveness: Vec<Liveness>,
+    pub liveness: Vec<Liveness>,
     #[validate(minimum = 10)]
     #[serde(default = "push_interval_secs")]
-    pub(crate) push_interval_secs: u16,
+    pub push_interval_secs: u16,
     #[validate(minimum = 0.0)]
     #[validate(maximum = 100.0)]
     #[serde(default = "autotruncate_at_usage_percent")]
-    pub(crate) autotruncate_at_usage_percent: f32,
+    pub autotruncate_at_usage_percent: f32,
 }
 
 #[cfg(test)]
@@ -237,7 +245,7 @@ mod tests {
     }
 
     #[test]
-    fn case_insentive_liveness_typ() {
+    fn case_insensitive_liveness_typ() {
         let config = r#"
         spreadsheet_id = "123"
         [[liveness]]

@@ -1,18 +1,17 @@
 pub mod configuration;
 pub mod google;
+pub mod http;
 pub mod messenger;
 pub mod notifications;
 pub mod rules;
 pub mod services;
 pub mod storage;
 use chrono::{DateTime, NaiveDateTime, Utc};
-pub use configuration::*;
+pub use configuration::{Configuration, APP_NAME};
 use google::sheet::TabColorRGB;
 pub use google::*;
-use google_sheets4::hyper_rustls::HttpsConnector;
-use hyper::{client::connect::HttpConnector, Client};
 use lazy_static::lazy_static;
-pub use messenger::*;
+pub use messenger::{get_messenger, BoxedMessenger};
 pub use notifications::*;
 use regex::Regex;
 use services::general::{GeneralService, GENERAL_SERVICE_NAME};
@@ -29,10 +28,7 @@ use std::time::Duration;
 pub use storage::*;
 use tokio::sync::mpsc::Receiver;
 
-pub(crate) type HyperConnector = HttpsConnector<HttpConnector>;
-pub(crate) type HttpsClient = Client<HyperConnector>;
-
-pub(crate) const HOST_ID_CHARS_LIMIT: usize = 8;
+pub const HOST_ID_CHARS_LIMIT: usize = 8;
 
 fn get_service_tab_color(service_name: &str) -> TabColorRGB {
     let rgb: (u8, u8, u8) = match service_name {
@@ -195,8 +191,8 @@ pub fn collect_services(
 
 #[derive(Clone)]
 pub struct Shared {
-    pub(crate) messenger: Option<Arc<BoxedMessenger>>,
-    pub(crate) send_notification: notifications::Sender,
+    pub messenger: Option<Arc<BoxedMessenger>>,
+    pub send_notification: notifications::Sender,
 }
 
 impl Shared {
@@ -256,7 +252,7 @@ pub async fn welcome(
     .expect("assert: should be able to collect basic system info");
     let version = env!("CARGO_PKG_VERSION");
     let msg = format!(
-        "`{APP_NAME} v{version}` has started with [api usage page](https://console.cloud.google.com/apis/dashboard?project={project_id}&show=all) and [api quota page](https://console.cloud.google.com/iam-admin/quotas?project={project_id}) at `{sys}`", 
+        "{APP_NAME} `v{version}` has started with [api usage page](https://console.cloud.google.com/apis/dashboard?project={project_id}&show=all) and [api quota page](https://console.cloud.google.com/iam-admin/quotas?project={project_id}) at `{sys}`", 
     );
     send_notification.info(msg).await;
     if let Err(truncation_check) = truncation_check {
@@ -297,9 +293,9 @@ fn capture_datetime(line: &str) -> Option<NaiveDateTime> {
     })
 }
 
-pub(crate) fn jitter_duration() -> Duration {
+pub fn jitter_duration() -> Duration {
     let mut buf = [0u8; 2];
-    getrandom::getrandom(&mut buf).expect("assert: can get random from the OS");
+    getrandom::fill(&mut buf).expect("assert: can get random from the OS");
     let jitter = u16::from_be_bytes(buf);
     let jitter = jitter >> 2; // to limit values to 2^14 = 16384 or ~16 secs
     Duration::from_millis(u64::from(jitter))
@@ -308,7 +304,7 @@ pub(crate) fn jitter_duration() -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
-    pub(crate) const TEST_HOST_ID: &str = "testhost";
+    pub const TEST_HOST_ID: &str = "testhost";
     use chrono::NaiveDate;
 
     #[test]

@@ -70,7 +70,7 @@ async fn start() -> Result<(), String> {
 
     let config = Configuration::new(&args.config.display().to_string()).map_err(|e|
         format!(
-            "Incorrect configuration (can be potentially overriden by environment variables starting with `GORAL__`): {e}"
+            "Incorrect configuration (can be potentially overridden by environment variables starting with `GORAL__`): {e}"
         )
     )?;
 
@@ -85,11 +85,23 @@ async fn start() -> Result<(), String> {
 
     let (json, plain) = if args.json {
         (
-            Some(tracing_subscriber::fmt::layer().with_target(true).json()),
+            Some(
+                tracing_subscriber::fmt::layer()
+                    .with_target(true)
+                    .with_thread_names(true)
+                    .json(),
+            ),
             None,
         )
     } else {
-        (None, Some(tracing_subscriber::fmt::layer()))
+        (
+            None,
+            Some(
+                tracing_subscriber::fmt::layer()
+                    .with_ansi(true)
+                    .with_thread_names(true),
+            ),
+        )
     };
 
     tracing_subscriber::registry()
