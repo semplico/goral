@@ -1,5 +1,3 @@
-#![forbid(unsafe_code)]
-
 use clap::Parser;
 use futures::future::try_join_all;
 use goral::configuration::{Configuration, APP_NAME};

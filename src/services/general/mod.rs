@@ -239,7 +239,7 @@ mod tests {
         for _ in 0..NUMBER_OF_MESSAGES {
             shared
                 .send_notification
-                .try_info(format!("some notification"));
+                .try_info("some notification".to_string());
         }
 
         shutdown

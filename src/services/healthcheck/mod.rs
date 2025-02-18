@@ -248,7 +248,10 @@ impl HealthcheckService {
                 ("is_alive".to_string(), Datavalue::Bool(is_alive)),
                 (
                     "latency_ms".to_string(),
-                    Datavalue::Integer(latency.as_millis() as u32),
+                    Datavalue::Integer(
+                        u32::try_from(latency.as_millis())
+                            .expect("assert: latency milliseconds fit u32"),
+                    ),
                 ), // SAFE: cap latency at u32::MAX
                 ("output".to_string(), Datavalue::Text(text)),
             ],
@@ -433,7 +436,7 @@ mod tests {
         assert!(
             liveness.to_string().contains("check1"),
             "if name is provided, it should be used for Display: {}",
-            liveness.to_string()
+            liveness
         );
     }
 
@@ -449,7 +452,7 @@ mod tests {
         assert!(
             liveness.to_string().contains("ls -lha"),
             "the command itself is be used for Display if no name is provided: {}",
-            liveness.to_string()
+            liveness
         );
     }
 
@@ -465,7 +468,7 @@ mod tests {
         assert!(
             liveness.to_string().contains("127.0.0.1:53258"),
             "the tcp sock addr is be used for Display if no name is provided: {}",
-            liveness.to_string()
+            liveness
         );
     }
 
@@ -612,7 +615,7 @@ mod tests {
     #[tokio::test]
     async fn http_probe_initial_delay() {
         let delay = Duration::from_millis(50);
-        let cloned_delay = delay.clone();
+        let cloned_delay = delay;
         let _shut = tokio::spawn(async move {
             tokio::time::sleep(cloned_delay).await;
             run_test_server(53256).await
@@ -701,10 +704,8 @@ mod tests {
         let server = tokio::task::spawn_blocking(|| {
             let listener = TcpListener::bind("127.0.0.1:53257")
                 .expect("test assert: should be able to create a listening tcp socket");
-            for _stream in listener.incoming() {
-                //accept just one connection
-                return;
-            }
+            //accept just one connection
+            listener.incoming().next();
         });
         tokio::time::sleep(Duration::from_millis(50)).await; // some time for a thread to start
         let liveness = Liveness {

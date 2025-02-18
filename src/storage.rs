@@ -375,6 +375,8 @@ impl AppendableLog {
         }
     }
 
+    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_possible_truncation)]
     fn prepare_truncate_requests(
         &mut self,
         existing_service_sheets: &HashMap<SheetId, (Sheet, Vec<String>)>,
@@ -383,7 +385,7 @@ impl AppendableLog {
         limit: f32,
         rows_count: &mut HashMap<SheetId, i32>,
     ) -> Vec<CleanupSheet> {
-        let limit = limit as f64; // SAFE as limit is supposed to be a % so under 100.0
+        let limit = f64::from(limit); // SAFE as limit is supposed to be a % so under 100.0
         for (sheet_id, rows) in data_to_append {
             *rows_count
                 .get_mut(sheet_id)
@@ -483,7 +485,12 @@ impl AppendableLog {
         let requests = usages
             .into_iter()
             .flat_map(|(_, (_, log_cells_usage, mut sheets))| {
-                let mut cells_to_delete_for_log = (log_cells_usage * cells_to_delete) as i32; // SAFE as the upper bound for cells for Sheets is within i32::MAX
+                let cells_to_delete_for_log: f64 = log_cells_usage * cells_to_delete; // SAFE as the upper bound for cells for Sheets is within i32::MAX
+                assert!(
+                    cells_to_delete_for_log < f64::from(i32::MAX),
+                    "assert: the upper bound for cells for Sheets is within i32::MAX"
+                );
+                let mut cells_to_delete_for_log = cells_to_delete_for_log as i32;
                 sheets.sort_unstable_by_key(|s| s.updated_at);
                 let mut requests = Vec::with_capacity(sheets.len());
                 for sheet in sheets {
@@ -563,11 +570,13 @@ struct SheetUsage {
 
 macro_rules! sheet_name_jitter {
     ($sheet_id:expr) => {
-        // we need 8 lowest significant bytes
+        // we need 8 lowest significant bits
         (*$sheet_id as u8) >> 3
     };
 }
 
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
 fn prepare_sheet_title(
     host_id: &str,
     service: &str,
@@ -609,6 +618,8 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
     fn jitter() {
         let jitter = sheet_name_jitter!(&137328873_i32);
         assert!(
@@ -645,16 +656,16 @@ mod tests {
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key12"), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -702,32 +713,32 @@ mod tests {
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key23"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key23".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key12"), Datavalue::Size(400_u64)),
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name3".to_string(),
                 timestamp,
                 vec![
-                    (format!("key31"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key32"), Datavalue::Size(400_u64)),
+                    ("key31".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key32".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -828,16 +839,16 @@ mod tests {
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key12"), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -878,16 +889,16 @@ mod tests {
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key12"), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -935,16 +946,16 @@ mod tests {
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key12"), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -990,16 +1001,16 @@ mod tests {
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key12"), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -1046,16 +1057,16 @@ mod tests {
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key12"), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -1108,18 +1119,18 @@ mod tests {
                 datarows.push(Datarow::new(
                     "log_name1".to_string(),
                     timestamp,
-                    vec![(format!("key11"), Datavalue::Size(400_u64))],
+                    vec![("key11".to_string(), Datavalue::Size(400_u64))],
                 ));
                 datarows.push(Datarow::new(
                     "log_name2".to_string(),
                     timestamp,
-                    vec![(format!("key21"), Datavalue::Size(400_u64))],
+                    vec![("key21".to_string(), Datavalue::Size(400_u64))],
                 ));
             }
             datarows.push(Datarow::new(
                 RULES_LOG_NAME.to_string(),
                 timestamp,
-                vec![(format!("key21"), Datavalue::Size(400_u64))],
+                vec![("key21".to_string(), Datavalue::Size(400_u64))],
             )); // 2 rows of rules (including header row) or 4 cells
 
             log.append(datarows).await.unwrap(); // 808 cells of log_name1, log_name2 and rules including headers
@@ -1136,18 +1147,16 @@ mod tests {
                 "`log_name1`, `log_name2`, `{}` sheets have been created",
                 RULES_LOG_NAME
             );
-            for i in 0..3 {
-                if all_sheets[i].title().contains("log_name1")
-                    || all_sheets[i].title().contains("log_name2")
-                {
+            for sheet in all_sheets.iter().take(3) {
+                if sheet.title().contains("log_name1") || sheet.title().contains("log_name2") {
                     assert_eq!(
-                        all_sheets[i].row_count(),
+                        sheet.row_count(),
                         Some(201),
                         "`log_name..` contains header row and 248 rows of data"
                     );
                 } else {
                     assert_eq!(
-                        all_sheets[i].row_count(),
+                        sheet.row_count(),
                         Some(2),
                         "`{}` contains header row and 1 row of data",
                         RULES_LOG_NAME
@@ -1164,12 +1173,12 @@ mod tests {
                 datarows.push(Datarow::new(
                     "log_name1".to_string(),
                     timestamp,
-                    vec![(format!("key12"), Datavalue::Size(400_u64))],
+                    vec![("key12".to_string(), Datavalue::Size(400_u64))],
                 ));
                 datarows.push(Datarow::new(
                     "log_name2".to_string(),
                     timestamp,
-                    vec![(format!("key21"), Datavalue::Size(400_u64))],
+                    vec![("key21".to_string(), Datavalue::Size(400_u64))],
                 ));
             } // log_name1 - new sheet to be created with headers,
               // so old log_name1 - 201 rows, new log_name1 - 101 rows, log_name2 - 301 rows, rules - 2 rows - total 605 rows or 1210 cells
@@ -1192,17 +1201,14 @@ mod tests {
                 "`log_name1` with another key has been created"
             );
 
-            for i in 0..3 {
-                if all_sheets[i].title().contains("log_name2") {
-                    assert_eq!(all_sheets[i].row_count(), Some(174));
-                } else if all_sheets[i].title().contains("log_name1") {
-                    assert!(
-                        all_sheets[i].row_count() == Some(73)
-                            || all_sheets[i].row_count() == Some(101),
-                    );
+            for sheet in all_sheets.iter().take(3) {
+                if sheet.title().contains("log_name2") {
+                    assert_eq!(sheet.row_count(), Some(174));
+                } else if sheet.title().contains("log_name1") {
+                    assert!(sheet.row_count() == Some(73) || sheet.row_count() == Some(101),);
                 } else {
                     assert_eq!(
-                        all_sheets[i].row_count(),
+                        sheet.row_count(),
                         Some(2),
                         "`{}` contains header row and 1 row of data",
                         RULES_LOG_NAME

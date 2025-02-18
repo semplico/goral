@@ -347,6 +347,7 @@ impl From<Datarow> for RowData {
                         ExtendedValue {
                             // Size type allows some round errors
                             // as it is used for system data
+                            #[allow(clippy::cast_precision_loss)]
                             number_value: Some(s as f64),
                             ..Default::default()
                         },
@@ -416,6 +417,7 @@ impl From<Datarow> for RuleApplicant {
                     Percent(p) | HeatmapPercent(p) => Number(p / 100.0),
                     Datetime(d) => Number(convert_datetime_to_spreadsheet_double(d)),
                     Bool(b) => Bool(b),
+                    #[allow(clippy::cast_precision_loss)]
                     Size(s) => Number(s as f64), // Rounding errors are acceptable for Size datavalues
                     NotAvailable => NotAvailable,
                 };
@@ -431,6 +433,7 @@ impl From<Datarow> for RuleApplicant {
 }
 
 // https://developers.google.com/sheets/api/reference/rest/v4/DateTimeRenderOption
+#[allow(clippy::cast_precision_loss)]
 fn convert_datetime_to_spreadsheet_double(d: NaiveDateTime) -> f64 {
     let base = NaiveDate::from_ymd_opt(1899, 12, 30)
         .expect("assert: static datetime")
@@ -482,8 +485,8 @@ mod tests {
             "/dev/shm".to_string(),
             scrape_time,
             vec![
-                (format!("disk_use"), Datavalue::HeatmapPercent(3_f64)),
-                (format!("disk_free"), Datavalue::Size(400_u64)),
+                ("disk_use".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                ("disk_free".to_string(), Datavalue::Size(400_u64)),
             ],
         );
         assert_eq!(895475598, datarow.sheet_id("host1", "system"));
@@ -499,8 +502,8 @@ mod tests {
             "/dev/shm".to_string(),
             scrape_time,
             vec![
-                (format!("disk_use"), Datavalue::HeatmapPercent(3_f64)),
-                (format!("disk_free"), Datavalue::Size(400_u64)),
+                ("disk_use".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                ("disk_free".to_string(), Datavalue::Size(400_u64)),
             ],
         );
         assert_eq!(
@@ -511,12 +514,12 @@ mod tests {
 
     #[test]
     fn spreadsheet_datetime() {
-        let timestamp = NaiveDate::from_ymd_opt(1900, 01, 01)
+        let timestamp = NaiveDate::from_ymd_opt(1900, 1, 1)
             .expect("test assert: static date")
             .and_hms_opt(12, 0, 0)
             .expect("test assert: static time");
         assert_eq!(convert_datetime_to_spreadsheet_double(timestamp), 2.5);
-        let timestamp = NaiveDate::from_ymd_opt(1900, 02, 01)
+        let timestamp = NaiveDate::from_ymd_opt(1900, 2, 1)
             .expect("test assert: static date")
             .and_hms_opt(15, 0, 0)
             .expect("test assert: static time");

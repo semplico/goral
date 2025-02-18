@@ -684,8 +684,8 @@ mod tests {
                                     "log_name1".to_string(),
                                     Utc::now().naive_utc(),
                                     vec![
-                                        (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                                        (format!("key12"), Datavalue::Size(400_u64)),
+                                        ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                                        ("key12".to_string(), Datavalue::Size(400_u64)),
                                     ],
                                 ),
                             ));

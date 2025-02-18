@@ -43,6 +43,7 @@ struct ProcessInfo {
 }
 
 impl ProcessInfo {
+    #[allow(clippy::cast_precision_loss)]
     fn from(sysinfo_process: &SysinfoProcess, total_memory: u64) -> Self {
         let name = if let Some(name) = sysinfo_process.exe() {
             name.file_name()
@@ -59,6 +60,10 @@ impl ProcessInfo {
             sysinfo_process.name().to_string()
         };
 
+        // SAFE: memory use should be under 100.0
+        // roundings errors are acceptable here
+        let memory_use: f32 = (100 * sysinfo_process.memory() / total_memory) as f32;
+
         Self {
             pid: sysinfo_process.pid(),
             name,
@@ -67,10 +72,8 @@ impl ProcessInfo {
             cpu_percent: sysinfo_process.cpu_usage(),
             memory_used: sysinfo_process.memory(),
             virtual_memory: sysinfo_process.virtual_memory(),
-            // SAFE: can cast f64 percent to f32
-            // Memory sizes can be casted from u64 to f64 with roundings errors
-            // which are acceptable here
-            memory_use: (100.0 * sysinfo_process.memory() as f64 / total_memory as f64) as f32,
+
+            memory_use,
             disk_read: sysinfo_process.disk_usage().read_bytes,
             disk_write: sysinfo_process.disk_usage().written_bytes,
             start_time: DateTime::from_timestamp(
@@ -88,6 +91,8 @@ impl ProcessInfo {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
 fn top_cpu_process(processes: &mut [ProcessInfo]) -> &ProcessInfo {
     // SAFE cast from f32 to u32 just for sorting purposes
     processes.sort_unstable_by_key(|p| (p.cpu_percent * 100.0) as u32);
@@ -174,12 +179,12 @@ fn process_to_values(process: &ProcessInfo, users: &Users) -> Vec<(String, Datav
         (
             MEMORY_USE.to_string(),
             // SAFE casting percentage from f32 to f64
-            Datavalue::HeatmapPercent(process.memory_use as f64),
+            Datavalue::HeatmapPercent(f64::from(process.memory_use)),
         ),
         (
             CPU.to_string(),
             // SAFE casting percentage from f32 to f64
-            Datavalue::HeatmapPercent(process.cpu_percent as f64),
+            Datavalue::HeatmapPercent(f64::from(process.cpu_percent)),
         ),
         ("disk_read".to_string(), Datavalue::Size(process.disk_read)),
         (
@@ -218,6 +223,7 @@ pub fn system_info() -> SystemInfo {
     }
 }
 
+#[allow(clippy::cast_precision_loss)]
 pub(super) fn collect(
     sys: &mut System,
     mounts: &[String],
@@ -276,7 +282,7 @@ pub(super) fn collect(
         (
             format!("cpu{i}"),
             // SAFE casting percentage from f32 to f64
-            Datavalue::HeatmapPercent(c.cpu_usage() as f64),
+            Datavalue::HeatmapPercent(f64::from(c.cpu_usage())),
         )
     });
 
@@ -398,7 +404,7 @@ fn disk_stat(
                 (
                     DISK_USE.to_string(),
                     // SAFE casting percentage from f32 to f64
-                    Datavalue::HeatmapPercent(stat.percent() as f64),
+                    Datavalue::HeatmapPercent(f64::from(stat.percent())),
                 ),
                 ("disk_free".to_string(), Datavalue::Size(stat.free())),
             ],

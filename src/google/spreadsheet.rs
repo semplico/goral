@@ -556,9 +556,9 @@ pub mod tests {
                                 grid_properties.row_count =
                                     Some(row_count + (i32::try_from(rows.len()).unwrap()));
                             } else {
-                                return Err(Self::bad_response(format!(
-                                    "cannot append cells to a non-grid sheet!"
-                                )));
+                                return Err(Self::bad_response(
+                                    "cannot append cells to a non-grid sheet!".to_string(),
+                                ));
                             }
                         } else {
                             return Err(Self::bad_response(format!(
@@ -664,7 +664,7 @@ pub mod tests {
                             .metadata_id
                             .unwrap();
                         if let Some((sheet_id, index)) = self.metadata.get(&metadata_id) {
-                            let sheet = self.sheets.get_mut(&sheet_id).unwrap();
+                            let sheet = self.sheets.get_mut(sheet_id).unwrap();
                             let metadatas = sheet.developer_metadata.as_mut().unwrap();
                             metadatas[*index].metadata_value = metadata_value;
                         } else {
@@ -719,9 +719,9 @@ pub mod tests {
                             if let Some(row_count) = grid_properties.row_count {
                                 grid_properties.row_count = Some(row_count - rows);
                             } else {
-                                return Err(Self::bad_response(format!(
-                                    "cannot delete cells from a non-grid sheet!"
-                                )));
+                                return Err(Self::bad_response(
+                                    "cannot delete cells from a non-grid sheet!".to_string(),
+                                ));
                             }
                         } else {
                             return Err(Self::bad_response(format!(

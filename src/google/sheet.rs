@@ -685,6 +685,7 @@ pub mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_lossless)]
     fn id_collision() {
         let mut counts = HashMap::new();
         let mut rng = rand::rng();
