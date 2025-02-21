@@ -5,18 +5,18 @@ permissions:
 
 on:
   push:
-    tags:
-      # Regex for a version number such as 0.1.0
-      - "[0-9]+.[0-9]+.[0-9]+"
-      # Regex for a prerelease such as 0.1.1rc1
-      - '[0-9]+.[0-9]+.[0-9]+rc[0-9]+'
-
+      branches:
+        - master
+      tags:
+        # Regex for a prerelease such as 0.1.1rc1
+        - '[0-9]+.[0-9]+.[0-9]+rc[0-9]+'
+      
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  lint-and-test:
-    name: Lint, audit and test
+  lint-and-audit:
+    name: Lint and audit
     runs-on: ubuntu-latest
 
     steps:
@@ -25,16 +25,23 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Get the release version from the tag
+      - name: Get the release version
         shell: bash
         run: |
           set +e
+
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          PACKAGE_VERSION=$(awk -F '"' '/^version =/ {print $2}' Cargo.toml)
           
-          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-          if echo "${GITHUB_REF#refs/tags/}" | grep -q "rc"; then
+          if echo "$TAG_NAME" | grep -q "rc"; then
+            echo "VERSION=$TAG_NAME" >> $GITHUB_ENV
             echo "PRERELEASE=true" >> $GITHUB_ENV
-          else
+          elif [[ "$GITHUB_REF" == "refs/heads/master" && "$PACKAGE_VERSION" == "$TAG_NAME" ]]; then
+            echo "VERSION=${PACKAGE_VERSION}" >> $GITHUB_ENV
             echo "PRERELEASE=false" >> $GITHUB_ENV
+          else
+            echo "no release version tag is found" 
+            exit 1 
           fi
 
       - name: Check release version
@@ -58,12 +65,6 @@ jobs:
             exit 1 
           fi
 
-          grep -q ${{ env.VERSION }} Cargo.toml
-          if [ $? -ne 0 ]; then 
-            echo "Cargo.toml should contain a new release version" 
-            exit 1 
-          fi
-
           grep -q ${{ env.VERSION }} CHANGELOG.md
           if [ $? -ne 0 ]; then 
             echo "CHANGELOG.md should contain a new release version" 
@@ -75,11 +76,6 @@ jobs:
             echo "installation.md should contain a new release version" 
             exit 1 
           fi
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-unknown-linux-gnu
 
       - name: Check fmt
         shell: bash
@@ -104,15 +100,10 @@ jobs:
         run: |
           cargo deny check licenses advisories sources
 
-      - name: Test
-        shell: bash
-        run: |
-          cargo test -- --nocapture
-
   build-and-upload:
-    name: Build and upload
+    name: Build, test and upload
     runs-on: ${{ matrix.os }}
-    needs: lint-and-test
+    needs: lint-and-audit
 
     strategy:
       matrix:
@@ -139,16 +130,20 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Get the release version from the tag
+      - name: Get the release version
         shell: bash
         run: |
           set +e
           
-          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
           if echo "${GITHUB_REF#refs/tags/}" | grep -q "rc"; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
             echo "PRERELEASE=true" >> $GITHUB_ENV
-          else
+          elif [[ "$GITHUB_REF" == "refs/heads/master" ]]; then
+            echo "VERSION=$(awk -F '"' '/^version =/ {print $2}' Cargo.toml)" >> $GITHUB_ENV
             echo "PRERELEASE=false" >> $GITHUB_ENV
+          else
+            echo "no release version is found" 
+            exit 1 
           fi
   
       - name: Install Rust
@@ -159,10 +154,12 @@ jobs:
       - name: Install target
         shell: bash
         run: |
-          if [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
-            exit 0
-          fi
           rustup target add ${{ matrix.target }}
+
+      - name: Test
+        shell: bash
+        run: |
+          cargo test -- --nocapture
 
       - name: Build
         shell: bash
@@ -209,16 +206,20 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Get the release version from the tag
+      - name: Get the release version
         shell: bash
         run: |
           set +e
           
-          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
           if echo "${GITHUB_REF#refs/tags/}" | grep -q "rc"; then
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
             echo "PRERELEASE=true" >> $GITHUB_ENV
-          else
+          elif [[ "$GITHUB_REF" == "refs/heads/master" ]]; then
+            echo "VERSION=$(awk -F '"' '/^version =/ {print $2}' Cargo.toml)" >> $GITHUB_ENV
             echo "PRERELEASE=false" >> $GITHUB_ENV
+          else
+            echo "no release version is found" 
+            exit 1 
           fi
 
       - name: Download artifacts
