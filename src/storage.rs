@@ -505,6 +505,7 @@ impl AppendableLog {
                         rows_count.remove(&sheet.sheet_id);
                     } else {
                         // remove some rows
+                        // TODO remove also blank rows after the data
                         let rows = sheet
                             .row_count
                             .min(cells_to_delete_for_log / sheet.column_count + 1);

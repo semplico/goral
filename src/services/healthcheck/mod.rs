@@ -168,7 +168,13 @@ impl HealthcheckService {
                         // we setup a new connection for the checked app each time as a new client would do
                         let client =
                             HttpClient::lousy(MAX_BYTES_LIVENESS_OUTPUT, false, liveness.timeout);
-                        client.get_text(url.clone()).await
+                        match client.get_text_and_status(url.clone()).await {
+                            Ok((text, _)) => Ok(text),
+                            Err((text, None)) => Err(text),
+                            Err((text, Some(status))) => {
+                                Err(format!("status code: {status}\n\n{text}"))
+                            }
+                        }
                     }
                     _ => Err(format!("unknown url scheme for probe {:?}", liveness)),
                 }
@@ -182,9 +188,13 @@ impl HealthcheckService {
                     .await
                 {
                     Ok(output) if output.status.success() => {
-                        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+                        let len = output.stdout.len().min(MAX_BYTES_LIVENESS_OUTPUT);
+                        Ok(String::from_utf8_lossy(&output.stdout[..len]).to_string())
                     }
-                    Ok(output) => Err(String::from_utf8_lossy(&output.stderr).to_string()),
+                    Ok(output) => {
+                        let len = output.stderr.len().min(MAX_BYTES_LIVENESS_OUTPUT);
+                        Err(String::from_utf8_lossy(&output.stderr[..len]).to_string())
+                    }
                     Err(e) => Err(format!("failed to execute {command:?} with error {e}")),
                 }
             }
@@ -581,6 +591,7 @@ mod tests {
         tokio::time::sleep(Duration::from_secs(u64::try_from(NUM_OF_PROBES).unwrap())).await;
         is_shutdown.store(true, Ordering::Release);
         data_receiver.close();
+        let expected = format!("status code: 500\n\n{UNHEALTHY_REPLY}");
 
         if let Some(TaskResult {
             result: Err(Data::Single(datarow)),
@@ -589,7 +600,7 @@ mod tests {
         {
             assert_eq!(
                 datarow.keys_values().get("output"),
-                Some(&Datavalue::Text(UNHEALTHY_REPLY.to_string()))
+                Some(&Datavalue::Text(expected.clone()))
             );
         } else {
             panic!("test assert: at least one unsuccessful probe should be collected");
@@ -602,7 +613,7 @@ mod tests {
         {
             assert_eq!(
                 datarow.keys_values().get("output"),
-                Some(&Datavalue::Text(UNHEALTHY_REPLY.to_string()))
+                Some(&Datavalue::Text(expected))
             );
         } else {
             panic!("test assert: second unsuccessful probe should be collected");

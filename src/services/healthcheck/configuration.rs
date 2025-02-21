@@ -84,7 +84,7 @@ pub(super) fn scrape_push_rule(
         acc + ceiled_division(*push_interval_secs, l.period_secs)
     });
     // we truncate output of probe to 1024 bytes - so estimated payload (without other fields) is around 20 KiB
-    const LIMIT: u16 = 20;
+    const LIMIT: u16 = 15;
     if number_of_rows_in_batch > LIMIT {
         return Err(serde_valid::validation::Error::Custom(
             format!("push interval ({push_interval_secs}) is too big for current choices of liveness periods or liveness periods are too small - too much data ({number_of_rows_in_batch} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet")
@@ -107,11 +107,11 @@ pub(super) fn scrape_push_rule(
 }
 
 fn liveness_period_secs() -> u16 {
-    3
+    5
 }
 
 fn liveness_timeout_ms() -> u32 {
-    1000
+    1500
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Validate)]
@@ -230,12 +230,12 @@ mod tests {
         assert_eq!(config.liveness[1].endpoint, None);
         // Defaults
         assert_eq!(config.push_interval_secs, 30);
-        assert_eq!(config.liveness[0].timeout_ms, 1000);
+        assert_eq!(config.liveness[0].timeout_ms, 1500);
         assert_eq!(config.liveness[0].initial_delay_secs, 0);
-        assert_eq!(config.liveness[0].period_secs, 3);
-        assert_eq!(config.liveness[1].timeout_ms, 1000);
+        assert_eq!(config.liveness[0].period_secs, 5);
+        assert_eq!(config.liveness[1].timeout_ms, 1500);
         assert_eq!(config.liveness[1].initial_delay_secs, 0);
-        assert_eq!(config.liveness[1].period_secs, 3);
+        assert_eq!(config.liveness[1].period_secs, 5);
 
         assert!(
             scrape_push_rule(&config.liveness, &config.push_interval_secs)

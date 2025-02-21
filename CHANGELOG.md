@@ -1,3 +1,8 @@
+* 0.1.11
+    * refactor Github flows
+    * healthcheck default scrape interval increased from 3s to 5s to prevent queue overfill
+    * http status code for http failed healthchecks prepends the response
+
 * 0.1.10
     * upgrade all dependencies (except sysinfo)
     * refactor http client and server usage
