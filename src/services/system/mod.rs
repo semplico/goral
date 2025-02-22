@@ -605,10 +605,7 @@ mod tests {
         });
 
         is_shutdown.store(true, Ordering::Release);
-        tokio::time::sleep(Duration::from_secs(
-            2 * u64::try_from(NUM_OF_SCRAPES).unwrap(),
-        ))
-        .await;
+        tokio::time::sleep(Duration::from_secs(4)).await;
         data_receiver.close();
 
         if let Some(TaskResult {
