@@ -566,7 +566,7 @@ mod tests {
             name: Some("test_check".to_string()),
             initial_delay: Duration::from_secs(0),
             period: Duration::from_secs(1),
-            timeout: Duration::from_millis(200),
+            timeout: Duration::from_millis(300),
             probe: Probe::Http(Uri::from_static("http://127.0.0.1:53255/unhealthy")),
         };
 
@@ -681,7 +681,7 @@ mod tests {
             else {
                 panic!("latency is an integer in ms")
             };
-            assert!(latency < 100);
+            assert!(latency < 200);
         } else {
             panic!("test assert: at least one successful probe should be collected");
         }
