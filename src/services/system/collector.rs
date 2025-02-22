@@ -45,20 +45,16 @@ struct ProcessInfo {
 impl ProcessInfo {
     #[allow(clippy::cast_precision_loss)]
     fn from(sysinfo_process: &SysinfoProcess, total_memory: u64) -> Self {
-        let name = if let Some(name) = sysinfo_process.exe() {
-            name.file_name()
-                .expect("assert: if process has a binary, it has a filename")
-                .to_string_lossy()
-                .into_owned()
-        } else if let Some(cmd) = sysinfo_process.cmd().first() {
-            Path::new(&cmd)
-                .file_name()
-                .expect("assert: should be able to get basename for process command first arg")
-                .to_string_lossy()
-                .into_owned()
-        } else {
-            sysinfo_process.name().to_string()
-        };
+        let name = sysinfo_process
+            .exe()
+            .and_then(|name| name.file_name())
+            .map(|filename| filename.to_string_lossy().into_owned())
+            .or(sysinfo_process.cmd().first().and_then(|cmd| {
+                Path::new(&cmd)
+                    .file_name()
+                    .map(|filename| filename.to_string_lossy().into_owned())
+            }))
+            .unwrap_or_else(|| sysinfo_process.name().to_string());
 
         // SAFE: memory use should be under 100.0
         // roundings errors are acceptable here
