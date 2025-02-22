@@ -59,9 +59,9 @@ jobs:
             exit 1 
           fi
 
-          grep -q ${{ env.VERSION }} .github/site/src/install.sh
+          grep -q ${{ env.VERSION }} .github/site/src/download.sh
           if [ $? -ne 0 ]; then 
-            echo "install.sh should contain a new release version" 
+            echo "download.sh should contain a new release version" 
             exit 1 
           fi
 
@@ -236,7 +236,7 @@ jobs:
           else
             echo "$(grep -A10000 ${{ env.VERSION }} CHANGELOG.md | grep -B10000 -m2 -P "[0-9]+\.[0-9]+\.[0-9]+" CHANGELOG.md | grep "\S" | grep -v -E "[0-9]+\.[0-9]+\.[0-9]+")" > ${{ env.VERSION }}-CHANGELOG.txt
             echo '' >> ${{ env.VERSION }}-CHANGELOG.txt
-            echo -E 'To update `curl --proto '=https' --tlsv1.2 -sSf https://maksimryndin.github.io/goral/install.sh | sh`' >> ${{ env.VERSION }}-CHANGELOG.txt
+            echo -E 'To update `curl --proto '=https' --tlsv1.2 -sSf https://maksimryndin.github.io/goral/download.sh | sh`' >> ${{ env.VERSION }}-CHANGELOG.txt
           fi
 
       - name: Release

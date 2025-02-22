@@ -5,7 +5,7 @@
 Observability toolkit for small projects. Easy-to-use and compatible with industry standards.
 
 ```sh
-curl --proto '=https' --tlsv1.2 -sSf https://maksimryndin.github.io/goral/install.sh | sh
+curl --proto '=https' --tlsv1.2 -sSf https://maksimryndin.github.io/goral/download.sh | sh
 ```
 
 Also check out [setup](https://maksimryndin.github.io/goral/setup.html) and [recommended deployment](https://maksimryndin.github.io/goral/recommended-deployment.html).

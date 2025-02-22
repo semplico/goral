@@ -1,9 +1,9 @@
 # Installation
 
-You can install (or update) Goral with 
+You can download Goral binary with 
 
 ```sh
-curl --proto '=https' --tlsv1.2 -sSf https://maksimryndin.github.io/goral/install.sh | sh
+curl --proto '=https' --tlsv1.2 -sSf https://maksimryndin.github.io/goral/download.sh | sh
 ```
 
 <details>

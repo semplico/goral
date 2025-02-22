@@ -1,7 +1,7 @@
 #!/bin/sh
 # shellcheck shell=dash
 
-# installation shell script for goral. Heavily taken from https://sh.rustup.rs/.
+# download shell script for goral. Heavily taken from https://sh.rustup.rs/.
 
 # It runs on Unix shells like {a,ba,da,k,z}sh. It uses the common `local`
 # extension. Note: Most shells limit `local` to 1 var per line, contra bash.
@@ -164,7 +164,7 @@ get_architecture() {
 }
 
 say() {
-    printf 'goral installer: %s\n' "$1"
+    printf 'goral downloader: %s\n' "$1"
 }
 
 err() {
