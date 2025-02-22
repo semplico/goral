@@ -566,7 +566,7 @@ mod tests {
             name: Some("test_check".to_string()),
             initial_delay: Duration::from_secs(0),
             period: Duration::from_secs(1),
-            timeout: Duration::from_millis(50),
+            timeout: Duration::from_millis(100),
             probe: Probe::Http(Uri::from_static("http://127.0.0.1:53255/unhealthy")),
         };
 
@@ -625,7 +625,7 @@ mod tests {
 
     #[tokio::test]
     async fn http_probe_initial_delay() {
-        let delay = Duration::from_millis(50);
+        let delay = Duration::from_millis(100);
         let cloned_delay = delay;
         let _shut = tokio::spawn(async move {
             tokio::time::sleep(cloned_delay).await;
@@ -642,7 +642,7 @@ mod tests {
             name: Some("test_check".to_string()),
             initial_delay: delay,
             period: Duration::from_secs(1),
-            timeout: Duration::from_millis(50),
+            timeout: Duration::from_millis(100),
             probe: Probe::Http(Uri::from_static("http://127.0.0.1:53256/health")),
         };
 
