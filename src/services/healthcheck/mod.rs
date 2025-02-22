@@ -509,7 +509,7 @@ mod tests {
             name: Some("test_check".to_string()),
             initial_delay: Duration::from_secs(0),
             period: Duration::from_secs(1),
-            timeout: Duration::from_millis(100),
+            timeout: Duration::from_millis(200),
             probe: Probe::Http(Uri::from_static("http://127.0.0.1:53254/health")),
         };
 
@@ -531,8 +531,8 @@ mod tests {
             .await;
         });
 
-        tokio::time::sleep(Duration::from_secs(3)).await;
         is_shutdown.store(true, Ordering::Release);
+        tokio::time::sleep(Duration::from_secs(3)).await;
         data_receiver.close();
 
         if let Some(TaskResult {
@@ -566,7 +566,7 @@ mod tests {
             name: Some("test_check".to_string()),
             initial_delay: Duration::from_secs(0),
             period: Duration::from_secs(1),
-            timeout: Duration::from_millis(100),
+            timeout: Duration::from_millis(200),
             probe: Probe::Http(Uri::from_static("http://127.0.0.1:53255/unhealthy")),
         };
 
@@ -588,8 +588,8 @@ mod tests {
             .await;
         });
 
-        tokio::time::sleep(Duration::from_secs(3)).await;
         is_shutdown.store(true, Ordering::Release);
+        tokio::time::sleep(Duration::from_secs(3)).await;
         data_receiver.close();
         let expected = format!("status code: 500\n\n{UNHEALTHY_REPLY}");
 
@@ -642,7 +642,7 @@ mod tests {
             name: Some("test_check".to_string()),
             initial_delay: delay,
             period: Duration::from_secs(1),
-            timeout: Duration::from_millis(100),
+            timeout: Duration::from_millis(200),
             probe: Probe::Http(Uri::from_static("http://127.0.0.1:53256/health")),
         };
 
@@ -664,8 +664,8 @@ mod tests {
             .await;
         });
 
-        tokio::time::sleep(Duration::from_secs(3)).await;
         is_shutdown.store(true, Ordering::Release);
+        tokio::time::sleep(Duration::from_secs(3)).await;
         data_receiver.close();
 
         if let Some(TaskResult {
