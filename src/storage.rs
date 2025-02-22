@@ -8,7 +8,7 @@ use crate::notifications::Sender;
 use crate::rules::{rules_dropdowns, Rule, RULES_LOG_NAME};
 use crate::{get_service_tab_color, jitter_duration, HOST_ID_CHARS_LIMIT};
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
@@ -313,34 +313,51 @@ impl AppendableLog {
         let mut sheets_to_add: Vec<VirtualSheet> =
             sheets_to_create.into_iter().map(|(_, (s, _))| s).collect();
         let mut sheets_to_update: Vec<UpdateSheet> = sheets_to_update.into_values().collect();
-        let truncate_requests = self.prepare_truncate_requests(
-            &existing_sheets,
-            &sheets_to_add,
-            &data_to_append,
-            self.truncate_at,
-            &mut rows_count,
+        let (trunc_requests_before_data_append, trunc_requests_after_data_append) = self
+            .prepare_truncate_requests(
+                &existing_sheets,
+                &sheets_to_add,
+                &data_to_append,
+                self.truncate_at,
+                &mut rows_count,
+            );
+        self.update_rows_metadata(
+            &rows_count,
+            &mut sheets_to_update,
+            sheets_to_add.as_mut_slice(),
+            &trunc_requests_after_data_append,
+            timestamp,
         );
-        self.update_rows_metadata(&rows_count, &mut sheets_to_update, &mut sheets_to_add);
+
         let data: Vec<Rows> = data_to_append.into_values().collect();
 
-        tracing::trace!("truncate_requests:\n{:?}", truncate_requests);
+        tracing::trace!(
+            "trunc_requests_before_data_append:\n{:?}",
+            trunc_requests_before_data_append
+        );
         tracing::trace!("sheets_to_update:\n{:?}", sheets_to_update);
         tracing::trace!("sheets_to_add:\n{:?}", sheets_to_add);
         tracing::trace!("data:\n{:?}", data);
+        tracing::trace!(
+            "trunc_requests_after_data_append:\n{:?}",
+            trunc_requests_after_data_append
+        );
 
         if sheets_to_add.is_empty() && sheets_to_update.is_empty() {
             return Ok(());
         }
 
-        let truncation = !truncate_requests.is_empty();
+        let truncation = !trunc_requests_before_data_append.is_empty()
+            || !trunc_requests_after_data_append.is_empty();
         self.storage
             .google
             .crud_sheets(
                 &self.spreadsheet_id,
-                truncate_requests,
+                trunc_requests_before_data_append,
                 sheets_to_update,
                 sheets_to_add,
                 data,
+                trunc_requests_after_data_append,
             )
             .await?;
 
@@ -353,10 +370,13 @@ impl AppendableLog {
     fn update_rows_metadata(
         &self,
         rows_count: &HashMap<SheetId, i32>,
-        updates: &mut Vec<UpdateSheet>,
-        sheets: &mut Vec<VirtualSheet>,
+        sheets_to_update: &mut Vec<UpdateSheet>,
+        sheets_to_add: &mut [VirtualSheet],
+        trunc_requests_after_data_append: &[CleanupSheet],
+        timestamp: DateTime<Utc>,
     ) {
-        for update in updates {
+        let updated: HashSet<i32> = sheets_to_update.iter().map(|s| s.sheet_id()).collect();
+        for update in sheets_to_update.iter_mut() {
             let rows = rows_count
                 .get(&update.sheet_id())
                 .expect("assert: rows counters initialized for existing sheets");
@@ -365,13 +385,31 @@ impl AppendableLog {
                 .insert(METADATA_ROW_COUNT.to_string(), rows.to_string())
         }
 
-        for sheet in sheets {
+        for new_sheet in sheets_to_add {
             let rows = rows_count
-                .get(&sheet.sheet_id())
+                .get(&new_sheet.sheet_id())
                 .expect("assert: rows counters initialized for new sheets");
-            sheet
+            new_sheet
                 .metadata_mut()
                 .insert(METADATA_ROW_COUNT.to_string(), rows.to_string());
+        }
+
+        // for existing sheets we only change updated_at
+        // so it is enough to have one update per sheet
+        for truncated in trunc_requests_after_data_append {
+            if updated.contains(&truncated.sheet_id()) {
+                continue;
+            }
+            let rows = rows_count
+                .get(&truncated.sheet_id())
+                .expect("assert: rows counters initialized for existing sheets");
+            sheets_to_update.push(UpdateSheet::new(
+                truncated.sheet_id(),
+                Metadata::new(vec![
+                    (METADATA_UPDATED_AT, timestamp.to_rfc3339()),
+                    (METADATA_ROW_COUNT, rows.to_string()),
+                ]),
+            ))
         }
     }
 
@@ -384,7 +422,7 @@ impl AppendableLog {
         data_to_append: &HashMap<SheetId, Rows>,
         limit: f32,
         rows_count: &mut HashMap<SheetId, i32>,
-    ) -> Vec<CleanupSheet> {
+    ) -> (Vec<CleanupSheet>, Vec<CleanupSheet>) {
         let limit = f64::from(limit); // SAFE as limit is supposed to be a % so under 100.0
         for (sheet_id, rows) in data_to_append {
             *rows_count
@@ -428,7 +466,7 @@ impl AppendableLog {
                     self.truncate_warning_is_sent = true;
                 }
             }
-            return vec![];
+            return (vec![], vec![]);
         }
         // remove surplus and 30% of the limit
         let cells_to_delete =
@@ -482,46 +520,60 @@ impl AppendableLog {
             });
 
         tracing::debug!("usages:\n{:#?}", usages);
-        let requests = usages
-            .into_iter()
-            .flat_map(|(_, (_, log_cells_usage, mut sheets))| {
-                let cells_to_delete_for_log: f64 = log_cells_usage * cells_to_delete; // SAFE as the upper bound for cells for Sheets is within i32::MAX
-                assert!(
-                    cells_to_delete_for_log < f64::from(i32::MAX),
-                    "assert: the upper bound for cells for Sheets is within i32::MAX"
-                );
-                let mut cells_to_delete_for_log = cells_to_delete_for_log as i32;
-                sheets.sort_unstable_by_key(|s| s.updated_at);
-                let mut requests = Vec::with_capacity(sheets.len());
-                for sheet in sheets {
-                    if cells_to_delete_for_log <= 0 {
-                        break;
-                    }
-                    let cells = sheet.row_count * sheet.column_count;
-                    if cells <= cells_to_delete_for_log {
-                        // remove the whole sheet
-                        requests.push(CleanupSheet::delete(sheet.sheet_id));
-                        cells_to_delete_for_log -= cells;
-                        rows_count.remove(&sheet.sheet_id);
-                    } else {
-                        // remove some rows
-                        // TODO remove also blank rows after the data
-                        let rows = sheet
-                            .row_count
-                            .min(cells_to_delete_for_log / sheet.column_count + 1);
-                        requests.push(CleanupSheet::truncate(sheet.sheet_id, rows));
-                        *rows_count
-                            .get_mut(&sheet.sheet_id)
-                            .expect("assert: rows counters were filled from existing sheets") -=
-                            rows;
-                        cells_to_delete_for_log = 0;
-                    }
+        let mut trunc_requests_before_data_append = vec![];
+        let mut trunc_requests_after_data_append = vec![];
+        for (_, (_, log_cells_usage, mut sheets)) in usages.into_iter() {
+            let cells_to_delete_for_log: f64 = log_cells_usage * cells_to_delete; // SAFE as the upper bound for cells for Sheets is within i32::MAX
+            assert!(
+                cells_to_delete_for_log < f64::from(i32::MAX),
+                "assert: the upper bound for cells for Sheets is within i32::MAX"
+            );
+            let mut cells_to_delete_for_log = cells_to_delete_for_log as i32;
+            sheets.sort_unstable_by_key(|s| s.updated_at);
+            // TODO exclude sheets to be created
+            for sheet in sheets {
+                if cells_to_delete_for_log <= 0 {
+                    break;
                 }
-                requests
-            })
-            .collect();
+                let cells = sheet.row_count * sheet.column_count;
+                if cells <= cells_to_delete_for_log {
+                    // remove the whole sheet
+                    trunc_requests_before_data_append.push(CleanupSheet::delete(sheet.sheet_id));
+                    cells_to_delete_for_log -= cells;
+                    rows_count.remove(&sheet.sheet_id);
+                } else {
+                    // remove some rows
+                    let rows_to_delete = sheet
+                        .row_count
+                        .min(cells_to_delete_for_log / sheet.column_count + 1);
+                    let start_row_index = 1;
+                    let end_row_index = start_row_index + rows_to_delete;
+                    // delete first `rows` rows
+                    trunc_requests_before_data_append.push(CleanupSheet::truncate(
+                        sheet.sheet_id,
+                        start_row_index,
+                        Some(end_row_index),
+                    ));
+                    let left_rows = sheet.row_count - rows_to_delete;
+                    // delete blank rows after left rows
+                    trunc_requests_after_data_append.push(CleanupSheet::truncate(
+                        sheet.sheet_id,
+                        left_rows,
+                        None,
+                    ));
+                    *rows_count
+                        .get_mut(&sheet.sheet_id)
+                        .expect("assert: rows counters were filled from existing sheets") =
+                        left_rows;
+                    cells_to_delete_for_log = 0;
+                }
+            }
+        }
         tracing::debug!("rows counters after truncation:\n{:?}", rows_count);
-        requests
+        (
+            trunc_requests_before_data_append,
+            trunc_requests_after_data_append,
+        )
     }
 
     pub fn host_id(&self) -> &str {
@@ -785,11 +837,11 @@ mod tests {
 
         assert_eq!(
             all_sheets[3].meta_value(METADATA_SERVICE_KEY),
-            Some(&GENERAL_SERVICE_NAME.to_string())
+            Some(GENERAL_SERVICE_NAME)
         );
         assert_eq!(
             all_sheets[3].meta_value(METADATA_HOST_ID_KEY),
-            Some(&TEST_HOST_ID.to_string())
+            Some(TEST_HOST_ID)
         );
 
         assert!(all_sheets[3]
@@ -1153,7 +1205,7 @@ mod tests {
                     assert_eq!(
                         sheet.row_count(),
                         Some(201),
-                        "`log_name..` contains header row and 248 rows of data"
+                        "`log_name..` contains header row and 200 rows of data"
                     );
                 } else {
                     assert_eq!(
@@ -1169,7 +1221,7 @@ mod tests {
             // now add 200 datarows => above the limit
             // for log_name1 the key has changed - new sheet will be created
 
-            let mut datarows = Vec::with_capacity(10);
+            let mut datarows = Vec::with_capacity(200);
             for _ in 0..100 {
                 datarows.push(Datarow::new(
                     "log_name1".to_string(),
@@ -1183,7 +1235,7 @@ mod tests {
                 ));
             } // log_name1 - new sheet to be created with headers,
               // so old log_name1 - 201 rows, new log_name1 - 101 rows, log_name2 - 301 rows, rules - 2 rows - total 605 rows or 1210 cells
-              // we remove 210 and 1000 * 30% or 510 cells
+              // we remove 210 (surplus) and 1000 * 30% or 510 cells
               // cells = (201+101+301) * 2 = 1206
               // (201+101)*2/1206 = 50.08% of log_name1 or 256 cells or 128 rows
               // 301*2/1206 = 49.91% of logn_name2 or 256 cells or 128 rows
@@ -1202,11 +1254,18 @@ mod tests {
                 "`log_name1` with another key has been created"
             );
 
+            println!("all sheets:\n{all_sheets:#?}");
+
             for sheet in all_sheets.iter().take(3) {
                 if sheet.title().contains("log_name2") {
                     assert_eq!(sheet.row_count(), Some(174));
+                    assert_eq!(sheet.meta_value(METADATA_ROW_COUNT), Some("174"))
                 } else if sheet.title().contains("log_name1") {
                     assert!(sheet.row_count() == Some(73) || sheet.row_count() == Some(101),);
+                    assert!(
+                        sheet.meta_value(METADATA_ROW_COUNT) == Some("73")
+                            || sheet.meta_value(METADATA_ROW_COUNT) == Some("101")
+                    );
                 } else {
                     assert_eq!(
                         sheet.row_count(),
@@ -1214,6 +1273,7 @@ mod tests {
                         "`{}` contains header row and 1 row of data",
                         RULES_LOG_NAME
                     );
+                    assert_eq!(sheet.meta_value(METADATA_ROW_COUNT), Some("2"))
                 }
             }
         } // a scope to drop senders

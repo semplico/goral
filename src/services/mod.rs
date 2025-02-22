@@ -77,7 +77,6 @@ pub struct TaskResult {
     result: Result<Data, Data>,
 }
 
-// TODO perhaps rayon with par_iter
 fn process_rules(
     is_shutdown: Arc<AtomicBool>,
     send_notification: Sender,

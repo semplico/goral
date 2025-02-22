@@ -128,7 +128,7 @@ pub struct Sheet {
 }
 
 impl Sheet {
-    pub fn meta_value(&self, key: &str) -> Option<&String> {
+    pub fn meta_value(&self, key: &str) -> Option<&str> {
         self.metadata.get(key)
     }
 
@@ -509,17 +509,35 @@ impl UpdateSheet {
 
 #[derive(Debug)]
 pub enum CleanupSheet {
-    Delete { sheet_id: SheetId },
-    Truncate { sheet_id: SheetId, rows: i32 },
+    Delete {
+        sheet_id: SheetId,
+    },
+    Truncate {
+        sheet_id: SheetId,
+        start_row_index: i32,
+        end_row_index: Option<i32>,
+    },
 }
 
 impl CleanupSheet {
+    pub fn sheet_id(&self) -> SheetId {
+        match self {
+            CleanupSheet::Delete { sheet_id } => *sheet_id,
+            CleanupSheet::Truncate { sheet_id, .. } => *sheet_id,
+        }
+    }
+
     pub fn delete(sheet_id: SheetId) -> Self {
         Self::Delete { sheet_id }
     }
 
-    pub fn truncate(sheet_id: SheetId, rows: i32) -> Self {
-        Self::Truncate { sheet_id, rows }
+    pub fn truncate(sheet_id: SheetId, start_row_index: i32, end_row_index: Option<i32>) -> Self {
+        assert!(start_row_index > 0, "assert: cannot truncate the first row");
+        Self::Truncate {
+            sheet_id,
+            start_row_index,
+            end_row_index,
+        }
     }
 
     pub(super) fn into_api_request(self) -> Request {
@@ -530,12 +548,16 @@ impl CleanupSheet {
                 }),
                 ..Default::default()
             },
-            CleanupSheet::Truncate { sheet_id, rows } => Request {
+            CleanupSheet::Truncate {
+                sheet_id,
+                start_row_index,
+                end_row_index,
+            } => Request {
                 delete_range: Some(DeleteRangeRequest {
                     range: Some(GridRange {
                         sheet_id: Some(sheet_id),
-                        start_row_index: Some(1),
-                        end_row_index: Some(rows),
+                        start_row_index: Some(start_row_index),
+                        end_row_index,
                         ..Default::default()
                     }),
                     shift_dimension: Some("ROWS".to_string()),

@@ -272,16 +272,21 @@ impl SpreadsheetAPI {
     async fn _crud_sheets(
         &self,
         spreadsheet_id: &str,
-        truncates: Vec<CleanupSheet>,
+        truncates_before: Vec<CleanupSheet>,
         updates: Vec<UpdateSheet>,
         sheets: Vec<VirtualSheet>,
         data: Vec<Rows>,
+        truncates_after: Vec<CleanupSheet>,
     ) -> Result<BatchUpdateSpreadsheetResponse, StorageError> {
         // capacity for actual usage
         let mut requests = Vec::with_capacity(
-            truncates.len() + sheets.len() * 10 + data.len() * 2 + updates.len(),
+            truncates_before.len()
+                + sheets.len() * 10
+                + data.len() * 2
+                + updates.len()
+                + truncates_after.len(),
         );
-        for truncate in truncates.into_iter() {
+        for truncate in truncates_before.into_iter() {
             requests.push(truncate.into_api_request());
         }
 
@@ -295,6 +300,10 @@ impl SpreadsheetAPI {
 
         for rows in data.into_iter() {
             requests.append(&mut rows.into_api_requests())
+        }
+
+        for truncate in truncates_after.into_iter() {
+            requests.push(truncate.into_api_request());
         }
 
         tracing::trace!("requests:\n{:?}", requests);
@@ -315,17 +324,25 @@ impl SpreadsheetAPI {
     pub async fn crud_sheets(
         &self,
         spreadsheet_id: &str,
-        truncates: Vec<CleanupSheet>,
+        truncates_before: Vec<CleanupSheet>,
         updates: Vec<UpdateSheet>,
         sheets: Vec<VirtualSheet>,
         data: Vec<Rows>,
+        truncates_after: Vec<CleanupSheet>,
     ) -> Result<(), StorageError> {
-        self._crud_sheets(spreadsheet_id, truncates, updates, sheets, data)
-            .await
-            .map_err(|e| {
-                tracing::error!("{:?}", e);
-                e
-            })?;
+        self._crud_sheets(
+            spreadsheet_id,
+            truncates_before,
+            updates,
+            sheets,
+            data,
+            truncates_after,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("{:?}", e);
+            e
+        })?;
         Ok(())
     }
 }
@@ -699,8 +716,8 @@ pub mod tests {
                                 range:
                                     Some(GridRange {
                                         sheet_id: Some(sheet_id),
-                                        start_row_index: Some(1),
-                                        end_row_index: Some(rows),
+                                        start_row_index: Some(start_row_index),
+                                        end_row_index,
                                         ..
                                     }),
                                 shift_dimension: Some(dimension),
@@ -717,7 +734,15 @@ pub mod tests {
                                 .as_mut()
                                 .expect("assert: goral creates grid sheets with grid_properties");
                             if let Some(row_count) = grid_properties.row_count {
-                                grid_properties.row_count = Some(row_count - rows);
+                                match end_row_index {
+                                    Some(end_row_index) => {
+                                        grid_properties.row_count =
+                                            Some(row_count - end_row_index + start_row_index);
+                                    }
+                                    None => {
+                                        grid_properties.row_count = Some(start_row_index);
+                                    }
+                                }
                             } else {
                                 return Err(Self::bad_response(
                                     "cannot delete cells from a non-grid sheet!".to_string(),
