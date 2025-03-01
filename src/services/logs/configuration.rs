@@ -1,3 +1,4 @@
+use crate::configuration::MAX_GOOGLE_REQUEST_DURATION_SECS;
 use crate::messenger::configuration::MessengerConfig;
 
 use serde_derive::Deserialize;
@@ -5,7 +6,8 @@ use serde_valid::Validate;
 
 pub(super) fn channel_capacity(push_interval_secs: &u16) -> usize {
     const AVERAGE_DATAROWS_PER_SECOND: u16 = 10; // estimate of average log lines per second
-    let number_of_rows_in_batch = AVERAGE_DATAROWS_PER_SECOND * push_interval_secs;
+    let number_of_rows_in_batch =
+        AVERAGE_DATAROWS_PER_SECOND * MAX_GOOGLE_REQUEST_DURATION_SECS.max(*push_interval_secs);
     // appending to log is time-consuming
     // during the append we accumulate datarows in the channel
     // Estimate of append duration - 1 sec per row

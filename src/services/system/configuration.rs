@@ -1,5 +1,6 @@
 use crate::configuration::{
     ceiled_division, scrape_interval_secs, scrape_timeout_interval_rule, APP_NAME,
+    MAX_GOOGLE_REQUEST_DURATION_SECS,
 };
 use crate::messenger::configuration::MessengerConfig;
 
@@ -35,17 +36,20 @@ pub(super) fn scrape_push_rule(
     #[cfg(target_os = "linux")]
     const AVERAGE_DATAROWS_PER_SCRAPE: u16 = 15; // see collector.rs, ssh.rs
     #[cfg(target_os = "linux")]
-    const LIMIT: u16 = 45;
+    const LIMIT: u16 = 90;
     #[cfg(not(target_os = "linux"))]
     const AVERAGE_DATAROWS_PER_SCRAPE: u16 = 10; // see collector.rs
     #[cfg(not(target_os = "linux"))]
-    const LIMIT: u16 = 20;
+    const LIMIT: u16 = 40;
 
-    let number_of_rows_in_batch =
-        ceiled_division(*push_interval_secs, *scrape_interval_secs) * AVERAGE_DATAROWS_PER_SCRAPE;
+    // We can wait for the previous request to finish during MAX_GOOGLE_REQUEST_DURATION_SECS
+    let number_of_rows_in_batch = ceiled_division(
+        MAX_GOOGLE_REQUEST_DURATION_SECS.max(*push_interval_secs),
+        *scrape_interval_secs,
+    ) * AVERAGE_DATAROWS_PER_SCRAPE;
     if number_of_rows_in_batch > LIMIT {
         return Err(serde_valid::validation::Error::Custom(
-            format!("push interval ({push_interval_secs}) is too big or scrape interval ({scrape_interval_secs}) is too small - too much data ({number_of_rows_in_batch} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet")
+            format!("push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) or scrape interval ({scrape_interval_secs}) is too small - too much data ({number_of_rows_in_batch} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet")
         ));
     }
     // appending to log is time-consuming
@@ -56,10 +60,10 @@ pub(super) fn scrape_push_rule(
         ceiled_division(append_duration, *scrape_interval_secs) * AVERAGE_DATAROWS_PER_SCRAPE;
     if number_of_queued_rows > LIMIT {
         return Err(serde_valid::validation::Error::Custom(
-            format!("push interval ({push_interval_secs}) is too big or scrape interval ({scrape_interval_secs}) is too small - too much data (estimated {number_of_queued_rows} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet")
+            format!("push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) or scrape interval ({scrape_interval_secs}) is too small - too much data (estimated {number_of_queued_rows} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet")
         ));
     }
-    Ok(number_of_queued_rows as usize)
+    Ok(number_of_queued_rows.into())
 }
 
 fn scrape_timeout_ms() -> u32 {
@@ -192,7 +196,7 @@ mod tests {
     fn scrape_push_violation() {
         let config = r#"
         spreadsheet_id = "123"
-        push_interval_secs = 21
+        push_interval_secs = 60
         scrape_interval_secs = 10
         "#;
 

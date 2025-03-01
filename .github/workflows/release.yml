@@ -36,7 +36,7 @@ jobs:
           if echo "$TAG_NAME" | grep -q "rc"; then
             echo "VERSION=$TAG_NAME" >> $GITHUB_ENV
             echo "PRERELEASE=true" >> $GITHUB_ENV
-          elif [[ "$GITHUB_REF" == "refs/heads/master" && "$PACKAGE_VERSION" == "$TAG_NAME" ]]; then
+          elif [[ "$GITHUB_REF" == "refs/heads/master" ]]; then
             echo "VERSION=${PACKAGE_VERSION}" >> $GITHUB_ENV
             echo "PRERELEASE=false" >> $GITHUB_ENV
           else
@@ -123,7 +123,7 @@ jobs:
           - build: mac-m1
             os: macos-14
             target: aarch64-apple-darwin
-    continue-on-error: true
+
     steps:
       - name: Clone repository
         uses: actions/checkout@v4

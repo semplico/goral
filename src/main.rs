@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::signal;
 use tokio::sync::broadcast;
+use tracing::Level;
 use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -52,7 +53,7 @@ struct Args {
     /// Host identifier (8 characters). Keep this argument persistent for this instance of Goral
     /// to properly identify your apps running at this host.
     /// It should be unique among all your hosts where Gorals observe your apps
-    /// as in case of the same spreadsheet used for several hosts the host id allows
+    /// as in the case of the same spreadsheet used for several hosts the host id allows
     /// to separate sheets with data coming from different hosts.
     /// If you move your app to another machine and want to keep on using the same
     /// sheets and charts, you just reuse that host id.
@@ -76,6 +77,7 @@ async fn start() -> Result<(), String> {
     let filter = EnvFilter::new("")
         .add_directive(level.into())
         .add_directive(
+            // to prevent logging oauth2 credentials
             "yup_oauth2=info"
                 .parse()
                 .expect("assert: tracing directive is properly set for yup_oauth2"),
@@ -86,16 +88,34 @@ async fn start() -> Result<(), String> {
             Some(
                 tracing_subscriber::fmt::layer()
                     .with_target(true)
+                    .with_line_number(true)
+                    .with_file(true)
+                    .with_ansi(true)
                     .with_thread_names(true)
                     .json(),
             ),
             None,
+        )
+    } else if level == Level::INFO {
+        (
+            None,
+            Some(
+                tracing_subscriber::fmt::layer()
+                    .with_target(false)
+                    .with_line_number(false)
+                    .with_file(false)
+                    .with_ansi(true)
+                    .with_thread_names(true),
+            ),
         )
     } else {
         (
             None,
             Some(
                 tracing_subscriber::fmt::layer()
+                    .with_target(true)
+                    .with_line_number(true)
+                    .with_file(true)
                     .with_ansi(true)
                     .with_thread_names(true),
             ),

@@ -77,7 +77,14 @@ async fn handle_error<T>(
                     Some(code) if code > 499 => {
                         Err(StorageError::Retriable(format!("bad request: {v}")))
                     }
-                    _ => Err(StorageError::NonRetriable(format!("bad request: {v}"))),
+                    _ => {
+                        let text = format!("bad request: {v}");
+                        if text.contains("This action would increase the number of cells in the workbook above the limit of 10000000 cells") {
+                            Err(StorageError::NonRetriable("The associated spreadsheet is full: either your services have incorrect [truncation limits](https://maksimryndin.github.io/goral/services.html#storage-quota) or you have other data in the spreadsheet. Until the spreadsheet is truncated manually, no new rows can be appended, no new rules updates will work.".to_string()))
+                        } else {
+                            Err(StorageError::NonRetriable(text))
+                        }
+                    }
                 }
             }
             SheetsError::Io(v) => Err(StorageError::Retriable(format!("io: {v}"))),
@@ -355,8 +362,8 @@ pub mod tests {
     use google_sheets4::api::Sheet as GoogleSheet;
     use google_sheets4::api::{
         AddSheetRequest, AppendCellsRequest, BasicFilter, CreateDeveloperMetadataRequest,
-        DeleteRangeRequest, DeleteSheetRequest, DeveloperMetadata, GridRange, Request,
-        SetBasicFilterRequest, SetDataValidationRequest, UpdateCellsRequest,
+        DeleteDimensionRequest, DeleteSheetRequest, DeveloperMetadata, DimensionRange, GridRange,
+        Request, SetBasicFilterRequest, SetDataValidationRequest, UpdateCellsRequest,
         UpdateDeveloperMetadataRequest,
     };
     use hyper::{header, Response as HyperResponse, StatusCode};
@@ -711,16 +718,16 @@ pub mod tests {
                     }
 
                     Request {
-                        delete_range:
-                            Some(DeleteRangeRequest {
+                        delete_dimension:
+                            Some(DeleteDimensionRequest {
                                 range:
-                                    Some(GridRange {
+                                    Some(DimensionRange {
                                         sheet_id: Some(sheet_id),
-                                        start_row_index: Some(start_row_index),
-                                        end_row_index,
+                                        start_index: Some(start_row_index),
+                                        end_index,
+                                        dimension: Some(dimension),
                                         ..
                                     }),
-                                shift_dimension: Some(dimension),
                             }),
                         ..
                     } => {
@@ -734,14 +741,16 @@ pub mod tests {
                                 .as_mut()
                                 .expect("assert: goral creates grid sheets with grid_properties");
                             if let Some(row_count) = grid_properties.row_count {
-                                match end_row_index {
-                                    Some(end_row_index) => {
-                                        grid_properties.row_count =
-                                            Some(row_count - end_row_index + start_row_index);
-                                    }
-                                    None => {
-                                        grid_properties.row_count = Some(start_row_index);
-                                    }
+                                if start_row_index >= row_count {
+                                    return Err(Self::bad_response(
+                                        format!("Cannot delete a row that doesn't exist. Tried to delete row index {start_row_index} but there are only {row_count} rows."),
+                                    ));
+                                }
+                                if let Some(end_index) = end_index {
+                                    grid_properties.row_count =
+                                        Some(row_count - end_index + start_row_index);
+                                } else {
+                                    grid_properties.row_count = Some(start_row_index);
                                 }
                             } else {
                                 return Err(Self::bad_response(

@@ -1,3 +1,4 @@
+use crate::configuration::MAX_GOOGLE_REQUEST_DURATION_SECS;
 use crate::google::datavalue::Datarow;
 use crate::google::sheet::{
     CleanupSheet, Rows, Sheet, SheetId, SheetType, TabColorRGB, UpdateSheet, VirtualSheet,
@@ -120,8 +121,11 @@ impl AppendableLog {
     }
 
     pub async fn append(&mut self, datarows: Vec<Datarow>) -> Result<(), StorageError> {
-        self.core_append(datarows, Some(Duration::from_secs(32)))
-            .await
+        self.core_append(
+            datarows,
+            Some(Duration::from_secs(MAX_GOOGLE_REQUEST_DURATION_SECS.into())),
+        )
+        .await
     }
 
     pub async fn append_no_retry(
@@ -325,20 +329,21 @@ impl AppendableLog {
             &rows_count,
             &mut sheets_to_update,
             sheets_to_add.as_mut_slice(),
+            &trunc_requests_before_data_append,
             &trunc_requests_after_data_append,
             timestamp,
         );
 
         let data: Vec<Rows> = data_to_append.into_values().collect();
 
-        tracing::trace!(
+        tracing::debug!(
             "trunc_requests_before_data_append:\n{:?}",
             trunc_requests_before_data_append
         );
         tracing::trace!("sheets_to_update:\n{:?}", sheets_to_update);
         tracing::trace!("sheets_to_add:\n{:?}", sheets_to_add);
         tracing::trace!("data:\n{:?}", data);
-        tracing::trace!(
+        tracing::debug!(
             "trunc_requests_after_data_append:\n{:?}",
             trunc_requests_after_data_append
         );
@@ -372,6 +377,7 @@ impl AppendableLog {
         rows_count: &HashMap<SheetId, i32>,
         sheets_to_update: &mut Vec<UpdateSheet>,
         sheets_to_add: &mut [VirtualSheet],
+        trunc_requests_before_data_append: &[CleanupSheet],
         trunc_requests_after_data_append: &[CleanupSheet],
         timestamp: DateTime<Utc>,
     ) {
@@ -396,7 +402,10 @@ impl AppendableLog {
 
         // for existing sheets we only change updated_at
         // so it is enough to have one update per sheet
-        for truncated in trunc_requests_after_data_append {
+        for truncated in trunc_requests_before_data_append
+            .iter()
+            .chain(trunc_requests_after_data_append.iter())
+        {
             if updated.contains(&truncated.sheet_id()) {
                 continue;
             }
@@ -444,7 +453,10 @@ impl AppendableLog {
                 let used_rows = rows_count
                     .get(&s.sheet_id())
                     .expect("assert: rows counters were filled from existing sheets");
-                used_rows * s.column_count().expect("assert: grid sheet has columns")
+                // We estimate total actual number of cells (rows with data + blank rows after)
+                // For sheets not yet created `used_rows` > `row_count`
+                used_rows.max(&s.row_count().expect("assert: grid sheet has rows"))
+                    * s.column_count().expect("assert: grid sheet has columns")
             })
             .sum();
         let usage =
@@ -497,12 +509,14 @@ impl AppendableLog {
                 if log_name == RULES_LOG_NAME {
                     return state;
                 }
+                // For proportions we only rely on rows with data
                 let used_rows = rows_count
                     .get(&s.sheet_id())
                     .expect("assert: rows counters were filled from existing sheets");
                 let sheet_usage = SheetUsage {
                     sheet_id: s.sheet_id(),
-                    row_count: *used_rows,
+                    used_rows: *used_rows,
+                    row_count: s.row_count().expect("assert: grid sheet has rows"),
                     column_count: s.column_count().expect("assert: grid sheet has columns"),
                     updated_at: DateTime::parse_from_rfc3339(
                         s.meta_value(METADATA_UPDATED_AT)
@@ -511,7 +525,7 @@ impl AppendableLog {
                     .expect("assert: `updated_at` metadata is serialized to rfc3339")
                     .into(),
                 };
-                let sheet_cells = sheet_usage.row_count * sheet_usage.column_count;
+                let sheet_cells = sheet_usage.used_rows * sheet_usage.column_count;
                 let stat = state.entry(log_name).or_insert((0, 0.0, vec![]));
                 stat.0 += sheet_cells;
                 stat.1 = f64::from(stat.0) / f64::from(cells_used_by_service); // share of usage by the log name
@@ -530,7 +544,7 @@ impl AppendableLog {
             );
             let mut cells_to_delete_for_log = cells_to_delete_for_log as i32;
             sheets.sort_unstable_by_key(|s| s.updated_at);
-            // TODO exclude sheets to be created
+
             for sheet in sheets {
                 if cells_to_delete_for_log <= 0 {
                     break;
@@ -544,23 +558,26 @@ impl AppendableLog {
                 } else {
                     // remove some rows
                     let rows_to_delete = sheet
-                        .row_count
+                        .used_rows
                         .min(cells_to_delete_for_log / sheet.column_count + 1);
-                    let start_row_index = 1;
-                    let end_row_index = start_row_index + rows_to_delete;
+                    let start_index = 1;
+                    let end_index = start_index + rows_to_delete;
                     // delete first `rows` rows
                     trunc_requests_before_data_append.push(CleanupSheet::truncate(
                         sheet.sheet_id,
-                        start_row_index,
-                        Some(end_row_index),
+                        start_index,
+                        Some(end_index),
                     ));
-                    let left_rows = sheet.row_count - rows_to_delete;
-                    // delete blank rows after left rows
-                    trunc_requests_after_data_append.push(CleanupSheet::truncate(
-                        sheet.sheet_id,
-                        left_rows,
-                        None,
-                    ));
+                    let left_rows = sheet.used_rows - rows_to_delete;
+                    if sheet.used_rows < sheet.row_count {
+                        // delete blank rows after left rows
+                        trunc_requests_after_data_append.push(CleanupSheet::truncate(
+                            sheet.sheet_id,
+                            left_rows,
+                            None,
+                        ));
+                    }
+
                     *rows_count
                         .get_mut(&sheet.sheet_id)
                         .expect("assert: rows counters were filled from existing sheets") =
@@ -616,6 +633,7 @@ impl AppendableLog {
 #[derive(Debug)]
 struct SheetUsage {
     sheet_id: SheetId,
+    used_rows: i32,
     row_count: i32,
     column_count: i32,
     updated_at: DateTime<Utc>,

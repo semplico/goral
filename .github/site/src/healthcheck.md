@@ -21,7 +21,7 @@ endpoint = "http://127.0.0.1:9898"
 [healthcheck]
 spreadsheet_id = "<spreadsheet_id>"
 # messenger.url = "<messenger api url for sending messages>"
-# push_interval_secs = 30
+# push_interval_secs = 20
 # autotruncate_at_usage_percent = 10
 [[healthcheck.liveness]]
 # name = "http://127.0.0.1:9898" # by default the endpoint itself is used as a name

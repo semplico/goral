@@ -240,6 +240,7 @@ pub async fn welcome(
             sys.long_os_version.as_ref(),
             sys.kernel_version.as_ref(),
             sys.host_name.as_ref(),
+            // TODO other fields
         ) {
             (Some(name), Some(os_version), Some(kernel_version), Some(host_name)) => format!(
                 "{name} {os_version}(kernel {kernel_version}); hostname: {host_name}, RAM {mem}"
@@ -257,6 +258,7 @@ pub async fn welcome(
     .await
     .expect("assert: should be able to collect basic system info");
     let version = env!("CARGO_PKG_VERSION");
+    // TODO add current_exe
     let msg = format!(
         "{APP_NAME} `v{version}` has started with [api usage page](https://console.cloud.google.com/apis/dashboard?project={project_id}&show=all) and [api quota page](https://console.cloud.google.com/iam-admin/quotas?project={project_id}) at `{sys}`", 
     );

@@ -3,10 +3,10 @@ use google_sheets4::api::Sheet as GoogleSheet;
 use google_sheets4::api::{
     AddSheetRequest, AppendCellsRequest, BasicFilter, BooleanCondition, CellData, CellFormat,
     Color, ColorStyle, ConditionValue, CreateDeveloperMetadataRequest, DataFilter,
-    DataValidationRule, DeleteRangeRequest, DeleteSheetRequest, DeveloperMetadata,
-    DeveloperMetadataLocation, DeveloperMetadataLookup, ExtendedValue, GridProperties, GridRange,
-    Request, RowData, SetBasicFilterRequest, SetDataValidationRequest, SheetProperties, TextFormat,
-    UpdateCellsRequest, UpdateDeveloperMetadataRequest,
+    DataValidationRule, DeleteDimensionRequest, DeleteSheetRequest, DeveloperMetadata,
+    DeveloperMetadataLocation, DeveloperMetadataLookup, DimensionRange, ExtendedValue,
+    GridProperties, GridRange, Request, RowData, SetBasicFilterRequest, SetDataValidationRequest,
+    SheetProperties, TextFormat, UpdateCellsRequest, UpdateDeveloperMetadataRequest,
 };
 use google_sheets4::FieldMask;
 use std::collections::hash_map::DefaultHasher;
@@ -514,8 +514,8 @@ pub enum CleanupSheet {
     },
     Truncate {
         sheet_id: SheetId,
-        start_row_index: i32,
-        end_row_index: Option<i32>,
+        start_index: i32,
+        end_index: Option<i32>,
     },
 }
 
@@ -531,12 +531,12 @@ impl CleanupSheet {
         Self::Delete { sheet_id }
     }
 
-    pub fn truncate(sheet_id: SheetId, start_row_index: i32, end_row_index: Option<i32>) -> Self {
-        assert!(start_row_index > 0, "assert: cannot truncate the first row");
+    pub fn truncate(sheet_id: SheetId, start_index: i32, end_index: Option<i32>) -> Self {
+        assert!(start_index > 0, "assert: cannot truncate the first row");
         Self::Truncate {
             sheet_id,
-            start_row_index,
-            end_row_index,
+            start_index,
+            end_index,
         }
     }
 
@@ -550,17 +550,16 @@ impl CleanupSheet {
             },
             CleanupSheet::Truncate {
                 sheet_id,
-                start_row_index,
-                end_row_index,
+                start_index,
+                end_index,
             } => Request {
-                delete_range: Some(DeleteRangeRequest {
-                    range: Some(GridRange {
+                delete_dimension: Some(DeleteDimensionRequest {
+                    range: Some(DimensionRange {
                         sheet_id: Some(sheet_id),
-                        start_row_index: Some(start_row_index),
-                        end_row_index,
-                        ..Default::default()
+                        dimension: Some("ROWS".to_string()),
+                        start_index: Some(start_index),
+                        end_index,
                     }),
-                    shift_dimension: Some("ROWS".to_string()),
                 }),
                 ..Default::default()
             },

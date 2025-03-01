@@ -1,6 +1,6 @@
 use crate::configuration::{
     case_insensitive_enum, ceiled_division, host_validation, log_name_opt, port_validation,
-    push_interval_secs,
+    MAX_GOOGLE_REQUEST_DURATION_SECS,
 };
 use crate::messenger::configuration::MessengerConfig;
 
@@ -80,30 +80,22 @@ pub(super) fn scrape_push_rule(
         }
     }
 
+    // We can wait for the previous request to finish during MAX_GOOGLE_REQUEST_DURATION_SECS
     let number_of_rows_in_batch = liveness.iter().fold(0, |acc, l| {
-        acc + ceiled_division(*push_interval_secs, l.period_secs)
+        acc + ceiled_division(
+            MAX_GOOGLE_REQUEST_DURATION_SECS.max(*push_interval_secs),
+            l.period_secs,
+        )
     });
+
     // we truncate output of probe to 1024 bytes - so estimated payload (without other fields) is around 20 KiB
     const LIMIT: u16 = 15;
     if number_of_rows_in_batch > LIMIT {
         return Err(serde_valid::validation::Error::Custom(
-            format!("push interval ({push_interval_secs}) is too big for current choices of liveness periods or liveness periods are too small - too much data ({number_of_rows_in_batch} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet")
+            format!("push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) for current choices of liveness periods or liveness periods are too small - too much data ({number_of_rows_in_batch} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet")
         ));
     }
-    // appending to log is time-consuming
-    // during the append we accumulate liveness outputs in the channel
-    // Estimate of append duration - 1 sec per row
-    // it intuitively clear for the user in a typical case of one healthcheck with period 1 sec and push interval 20 secs
-    let append_duration = number_of_rows_in_batch;
-    let number_of_queued_rows = liveness.iter().fold(0, |acc, l| {
-        acc + usize::from(ceiled_division(append_duration, l.period_secs))
-    });
-    if number_of_queued_rows > usize::from(LIMIT) {
-        return Err(serde_valid::validation::Error::Custom(
-            format!("push interval ({push_interval_secs}) is too big for current choices of liveness periods or liveness periods are too small - too much data ({number_of_queued_rows} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet")
-        ));
-    }
-    Ok(number_of_queued_rows)
+    Ok(number_of_rows_in_batch.into())
 }
 
 fn liveness_period_secs() -> u16 {
@@ -112,6 +104,10 @@ fn liveness_period_secs() -> u16 {
 
 fn liveness_timeout_ms() -> u32 {
     1500
+}
+
+fn push_interval_secs() -> u16 {
+    20
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, Validate)]
@@ -229,7 +225,7 @@ mod tests {
         );
         assert_eq!(config.liveness[1].endpoint, None);
         // Defaults
-        assert_eq!(config.push_interval_secs, 30);
+        assert_eq!(config.push_interval_secs, 20);
         assert_eq!(config.liveness[0].timeout_ms, 1500);
         assert_eq!(config.liveness[0].initial_delay_secs, 0);
         assert_eq!(config.liveness[0].period_secs, 5);
@@ -240,7 +236,7 @@ mod tests {
         assert!(
             scrape_push_rule(&config.liveness, &config.push_interval_secs)
                 .expect("channel capacity should be calculated for defaults")
-                > 0
+                > 0,
         );
     }
 
