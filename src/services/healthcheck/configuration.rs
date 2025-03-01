@@ -103,7 +103,7 @@ fn liveness_period_secs() -> u16 {
 }
 
 fn liveness_timeout_ms() -> u32 {
-    1500
+    3000
 }
 
 fn push_interval_secs() -> u16 {
@@ -226,10 +226,10 @@ mod tests {
         assert_eq!(config.liveness[1].endpoint, None);
         // Defaults
         assert_eq!(config.push_interval_secs, 20);
-        assert_eq!(config.liveness[0].timeout_ms, 1500);
+        assert_eq!(config.liveness[0].timeout_ms, 3000);
         assert_eq!(config.liveness[0].initial_delay_secs, 0);
         assert_eq!(config.liveness[0].period_secs, 5);
-        assert_eq!(config.liveness[1].timeout_ms, 1500);
+        assert_eq!(config.liveness[1].timeout_ms, 3000);
         assert_eq!(config.liveness[1].initial_delay_secs, 0);
         assert_eq!(config.liveness[1].period_secs, 5);
 
