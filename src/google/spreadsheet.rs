@@ -77,7 +77,14 @@ async fn handle_error<T>(
                     Some(code) if code > 499 => {
                         Err(StorageError::Retriable(format!("bad request: {v}")))
                     }
-                    _ => Err(StorageError::NonRetriable(format!("bad request: {v}"))),
+                    _ => {
+                        let text = format!("bad request: {v}");
+                        if text.contains("This action would increase the number of cells in the workbook above the limit of 10000000 cells") {
+                            Err(StorageError::NonRetriable("The associated spreadsheet is full: either your services have incorrect [truncation limits](https://maksimryndin.github.io/goral/services.html#storage-quota) or you have other data in the spreadsheet. Until the spreadsheet is truncated manually, no new rows can be appended, no new rules updates will work.".to_string()))
+                        } else {
+                            Err(StorageError::NonRetriable(text))
+                        }
+                    }
                 }
             }
             SheetsError::Io(v) => Err(StorageError::Retriable(format!("io: {v}"))),
@@ -272,16 +279,21 @@ impl SpreadsheetAPI {
     async fn _crud_sheets(
         &self,
         spreadsheet_id: &str,
-        truncates: Vec<CleanupSheet>,
+        truncates_before: Vec<CleanupSheet>,
         updates: Vec<UpdateSheet>,
         sheets: Vec<VirtualSheet>,
         data: Vec<Rows>,
+        truncates_after: Vec<CleanupSheet>,
     ) -> Result<BatchUpdateSpreadsheetResponse, StorageError> {
         // capacity for actual usage
         let mut requests = Vec::with_capacity(
-            truncates.len() + sheets.len() * 10 + data.len() * 2 + updates.len(),
+            truncates_before.len()
+                + sheets.len() * 10
+                + data.len() * 2
+                + updates.len()
+                + truncates_after.len(),
         );
-        for truncate in truncates.into_iter() {
+        for truncate in truncates_before.into_iter() {
             requests.push(truncate.into_api_request());
         }
 
@@ -295,6 +307,10 @@ impl SpreadsheetAPI {
 
         for rows in data.into_iter() {
             requests.append(&mut rows.into_api_requests())
+        }
+
+        for truncate in truncates_after.into_iter() {
+            requests.push(truncate.into_api_request());
         }
 
         tracing::trace!("requests:\n{:?}", requests);
@@ -315,17 +331,25 @@ impl SpreadsheetAPI {
     pub async fn crud_sheets(
         &self,
         spreadsheet_id: &str,
-        truncates: Vec<CleanupSheet>,
+        truncates_before: Vec<CleanupSheet>,
         updates: Vec<UpdateSheet>,
         sheets: Vec<VirtualSheet>,
         data: Vec<Rows>,
+        truncates_after: Vec<CleanupSheet>,
     ) -> Result<(), StorageError> {
-        self._crud_sheets(spreadsheet_id, truncates, updates, sheets, data)
-            .await
-            .map_err(|e| {
-                tracing::error!("{:?}", e);
-                e
-            })?;
+        self._crud_sheets(
+            spreadsheet_id,
+            truncates_before,
+            updates,
+            sheets,
+            data,
+            truncates_after,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("{:?}", e);
+            e
+        })?;
         Ok(())
     }
 }
@@ -338,8 +362,8 @@ pub mod tests {
     use google_sheets4::api::Sheet as GoogleSheet;
     use google_sheets4::api::{
         AddSheetRequest, AppendCellsRequest, BasicFilter, CreateDeveloperMetadataRequest,
-        DeleteRangeRequest, DeleteSheetRequest, DeveloperMetadata, GridRange, Request,
-        SetBasicFilterRequest, SetDataValidationRequest, UpdateCellsRequest,
+        DeleteDimensionRequest, DeleteSheetRequest, DeveloperMetadata, DimensionRange, GridRange,
+        Request, SetBasicFilterRequest, SetDataValidationRequest, UpdateCellsRequest,
         UpdateDeveloperMetadataRequest,
     };
     use hyper::{header, Response as HyperResponse, StatusCode};
@@ -556,9 +580,9 @@ pub mod tests {
                                 grid_properties.row_count =
                                     Some(row_count + (i32::try_from(rows.len()).unwrap()));
                             } else {
-                                return Err(Self::bad_response(format!(
-                                    "cannot append cells to a non-grid sheet!"
-                                )));
+                                return Err(Self::bad_response(
+                                    "cannot append cells to a non-grid sheet!".to_string(),
+                                ));
                             }
                         } else {
                             return Err(Self::bad_response(format!(
@@ -664,7 +688,7 @@ pub mod tests {
                             .metadata_id
                             .unwrap();
                         if let Some((sheet_id, index)) = self.metadata.get(&metadata_id) {
-                            let sheet = self.sheets.get_mut(&sheet_id).unwrap();
+                            let sheet = self.sheets.get_mut(sheet_id).unwrap();
                             let metadatas = sheet.developer_metadata.as_mut().unwrap();
                             metadatas[*index].metadata_value = metadata_value;
                         } else {
@@ -694,16 +718,16 @@ pub mod tests {
                     }
 
                     Request {
-                        delete_range:
-                            Some(DeleteRangeRequest {
+                        delete_dimension:
+                            Some(DeleteDimensionRequest {
                                 range:
-                                    Some(GridRange {
+                                    Some(DimensionRange {
                                         sheet_id: Some(sheet_id),
-                                        start_row_index: Some(1),
-                                        end_row_index: Some(rows),
+                                        start_index: Some(start_row_index),
+                                        end_index,
+                                        dimension: Some(dimension),
                                         ..
                                     }),
-                                shift_dimension: Some(dimension),
                             }),
                         ..
                     } => {
@@ -717,11 +741,21 @@ pub mod tests {
                                 .as_mut()
                                 .expect("assert: goral creates grid sheets with grid_properties");
                             if let Some(row_count) = grid_properties.row_count {
-                                grid_properties.row_count = Some(row_count - rows);
+                                if start_row_index >= row_count {
+                                    return Err(Self::bad_response(
+                                        format!("Cannot delete a row that doesn't exist. Tried to delete row index {start_row_index} but there are only {row_count} rows."),
+                                    ));
+                                }
+                                if let Some(end_index) = end_index {
+                                    grid_properties.row_count =
+                                        Some(row_count - end_index + start_row_index);
+                                } else {
+                                    grid_properties.row_count = Some(start_row_index);
+                                }
                             } else {
-                                return Err(Self::bad_response(format!(
-                                    "cannot delete cells from a non-grid sheet!"
-                                )));
+                                return Err(Self::bad_response(
+                                    "cannot delete cells from a non-grid sheet!".to_string(),
+                                ));
                             }
                         } else {
                             return Err(Self::bad_response(format!(

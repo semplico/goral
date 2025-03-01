@@ -3,7 +3,6 @@ pub mod configuration;
 #[cfg(target_os = "linux")]
 pub mod ssh;
 use crate::google::datavalue::{Datarow, Datavalue};
-use crate::http::HttpClient;
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{MessengerApi, Notification, Sender};
 use crate::rules::{Action, Rule, RuleCondition};
@@ -18,7 +17,9 @@ use std::sync::{
     Arc,
 };
 use std::time::Duration;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
+#[cfg(target_os = "linux")]
+use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
 pub const SYSTEM_SERVICE_NAME: &str = "system";
@@ -30,7 +31,8 @@ async fn ssh_versions() -> Result<String, Box<dyn std::error::Error + Send + Syn
     let url = "http://changelogs.ubuntu.com/changelogs/pool/main/o/openssh/"
         .parse()
         .expect("assert: ssh versions url is correct");
-    let client = HttpClient::lousy(MAX_BYTES_SSH_VERSIONS_OUTPUT, true, Duration::from_secs(2));
+    let client =
+        crate::http::HttpClient::lousy(MAX_BYTES_SSH_VERSIONS_OUTPUT, true, Duration::from_secs(2));
     let res = client.get_text(url).await?;
     Ok(res)
 }
@@ -602,11 +604,8 @@ mod tests {
             .await;
         });
 
-        tokio::time::sleep(Duration::from_secs(
-            2 * u64::try_from(NUM_OF_SCRAPES).unwrap(),
-        ))
-        .await;
         is_shutdown.store(true, Ordering::Release);
+        tokio::time::sleep(Duration::from_secs(4)).await;
         data_receiver.close();
 
         if let Some(TaskResult {

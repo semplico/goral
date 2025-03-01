@@ -86,18 +86,29 @@ impl HttpClient {
         }
     }
 
-    pub async fn get_text(&self, url: Uri) -> Result<String, String> {
+    pub async fn get_text_and_status(
+        &self,
+        url: Uri,
+    ) -> Result<(String, u16), (String, Option<u16>)> {
         let (body, response) = self
             .request(url, Method::GET, vec![], Body::default())
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| (e.to_string(), None))?;
 
         let text = String::from_utf8_lossy(&body).to_string();
-        if response.status() >= StatusCode::OK && response.status() < StatusCode::BAD_REQUEST {
-            Ok(text)
+        let status = response.status();
+        if status >= StatusCode::OK && status < StatusCode::BAD_REQUEST {
+            Ok((text, status.as_u16()))
         } else {
-            Err(text)
+            Err((text, Some(status.as_u16())))
         }
+    }
+
+    pub async fn get_text(&self, url: Uri) -> Result<String, String> {
+        self.get_text_and_status(url)
+            .await
+            .map(|(text, _)| text)
+            .map_err(|(err, _)| err)
     }
 
     pub async fn post_json<T>(
@@ -353,12 +364,12 @@ pub mod tests {
         tokio::time::sleep(Duration::from_millis(10)).await; // some time for server to start
 
         let client = HttpClient::lousy(HEALTHY_REPLY.len(), false, Duration::from_millis(10));
-        assert_eq!(
-            client
-                .get_text(Uri::from_static("http://127.0.0.1:53260/health"))
-                .await,
-            Ok(HEALTHY_REPLY.to_string())
-        );
+        let (text, status) = client
+            .get_text_and_status(Uri::from_static("http://127.0.0.1:53260/health"))
+            .await
+            .unwrap();
+        assert_eq!(text, HEALTHY_REPLY.to_string());
+        assert_eq!(status, 200);
     }
 
     #[tokio::test]
@@ -367,12 +378,14 @@ pub mod tests {
         tokio::time::sleep(Duration::from_millis(10)).await; // some time for server to start
 
         let client = HttpClient::lousy(UNHEALTHY_REPLY.len(), false, Duration::from_millis(10));
-        assert_eq!(
-            client
-                .get_text(Uri::from_static("http://127.0.0.1:53261/unhealthy"))
-                .await,
-            Err(UNHEALTHY_REPLY.to_string())
-        );
+        let Err((text, status)) = client
+            .get_text_and_status(Uri::from_static("http://127.0.0.1:53261/unhealthy"))
+            .await
+        else {
+            panic!("error should happen")
+        };
+        assert_eq!(text, UNHEALTHY_REPLY.to_string());
+        assert_eq!(status, Some(500));
     }
 
     #[tokio::test]

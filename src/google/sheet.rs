@@ -3,10 +3,10 @@ use google_sheets4::api::Sheet as GoogleSheet;
 use google_sheets4::api::{
     AddSheetRequest, AppendCellsRequest, BasicFilter, BooleanCondition, CellData, CellFormat,
     Color, ColorStyle, ConditionValue, CreateDeveloperMetadataRequest, DataFilter,
-    DataValidationRule, DeleteRangeRequest, DeleteSheetRequest, DeveloperMetadata,
-    DeveloperMetadataLocation, DeveloperMetadataLookup, ExtendedValue, GridProperties, GridRange,
-    Request, RowData, SetBasicFilterRequest, SetDataValidationRequest, SheetProperties, TextFormat,
-    UpdateCellsRequest, UpdateDeveloperMetadataRequest,
+    DataValidationRule, DeleteDimensionRequest, DeleteSheetRequest, DeveloperMetadata,
+    DeveloperMetadataLocation, DeveloperMetadataLookup, DimensionRange, ExtendedValue,
+    GridProperties, GridRange, Request, RowData, SetBasicFilterRequest, SetDataValidationRequest,
+    SheetProperties, TextFormat, UpdateCellsRequest, UpdateDeveloperMetadataRequest,
 };
 use google_sheets4::FieldMask;
 use std::collections::hash_map::DefaultHasher;
@@ -128,7 +128,7 @@ pub struct Sheet {
 }
 
 impl Sheet {
-    pub fn meta_value(&self, key: &str) -> Option<&String> {
+    pub fn meta_value(&self, key: &str) -> Option<&str> {
         self.metadata.get(key)
     }
 
@@ -509,17 +509,35 @@ impl UpdateSheet {
 
 #[derive(Debug)]
 pub enum CleanupSheet {
-    Delete { sheet_id: SheetId },
-    Truncate { sheet_id: SheetId, rows: i32 },
+    Delete {
+        sheet_id: SheetId,
+    },
+    Truncate {
+        sheet_id: SheetId,
+        start_index: i32,
+        end_index: Option<i32>,
+    },
 }
 
 impl CleanupSheet {
+    pub fn sheet_id(&self) -> SheetId {
+        match self {
+            CleanupSheet::Delete { sheet_id } => *sheet_id,
+            CleanupSheet::Truncate { sheet_id, .. } => *sheet_id,
+        }
+    }
+
     pub fn delete(sheet_id: SheetId) -> Self {
         Self::Delete { sheet_id }
     }
 
-    pub fn truncate(sheet_id: SheetId, rows: i32) -> Self {
-        Self::Truncate { sheet_id, rows }
+    pub fn truncate(sheet_id: SheetId, start_index: i32, end_index: Option<i32>) -> Self {
+        assert!(start_index > 0, "assert: cannot truncate the first row");
+        Self::Truncate {
+            sheet_id,
+            start_index,
+            end_index,
+        }
     }
 
     pub(super) fn into_api_request(self) -> Request {
@@ -530,15 +548,18 @@ impl CleanupSheet {
                 }),
                 ..Default::default()
             },
-            CleanupSheet::Truncate { sheet_id, rows } => Request {
-                delete_range: Some(DeleteRangeRequest {
-                    range: Some(GridRange {
+            CleanupSheet::Truncate {
+                sheet_id,
+                start_index,
+                end_index,
+            } => Request {
+                delete_dimension: Some(DeleteDimensionRequest {
+                    range: Some(DimensionRange {
                         sheet_id: Some(sheet_id),
-                        start_row_index: Some(1),
-                        end_row_index: Some(rows),
-                        ..Default::default()
+                        dimension: Some("ROWS".to_string()),
+                        start_index: Some(start_index),
+                        end_index,
                     }),
-                    shift_dimension: Some("ROWS".to_string()),
                 }),
                 ..Default::default()
             },
@@ -685,6 +706,7 @@ pub mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_lossless)]
     fn id_collision() {
         let mut counts = HashMap::new();
         let mut rng = rand::rng();

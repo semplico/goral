@@ -1,3 +1,4 @@
+use crate::configuration::MAX_GOOGLE_REQUEST_DURATION_SECS;
 use crate::google::datavalue::Datarow;
 use crate::google::sheet::{
     CleanupSheet, Rows, Sheet, SheetId, SheetType, TabColorRGB, UpdateSheet, VirtualSheet,
@@ -8,7 +9,7 @@ use crate::notifications::Sender;
 use crate::rules::{rules_dropdowns, Rule, RULES_LOG_NAME};
 use crate::{get_service_tab_color, jitter_duration, HOST_ID_CHARS_LIMIT};
 use chrono::{DateTime, Utc};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
@@ -120,8 +121,11 @@ impl AppendableLog {
     }
 
     pub async fn append(&mut self, datarows: Vec<Datarow>) -> Result<(), StorageError> {
-        self.core_append(datarows, Some(Duration::from_secs(32)))
-            .await
+        self.core_append(
+            datarows,
+            Some(Duration::from_secs(MAX_GOOGLE_REQUEST_DURATION_SECS.into())),
+        )
+        .await
     }
 
     pub async fn append_no_retry(
@@ -313,34 +317,52 @@ impl AppendableLog {
         let mut sheets_to_add: Vec<VirtualSheet> =
             sheets_to_create.into_iter().map(|(_, (s, _))| s).collect();
         let mut sheets_to_update: Vec<UpdateSheet> = sheets_to_update.into_values().collect();
-        let truncate_requests = self.prepare_truncate_requests(
-            &existing_sheets,
-            &sheets_to_add,
-            &data_to_append,
-            self.truncate_at,
-            &mut rows_count,
+        let (trunc_requests_before_data_append, trunc_requests_after_data_append) = self
+            .prepare_truncate_requests(
+                &existing_sheets,
+                &sheets_to_add,
+                &data_to_append,
+                self.truncate_at,
+                &mut rows_count,
+            );
+        self.update_rows_metadata(
+            &rows_count,
+            &mut sheets_to_update,
+            sheets_to_add.as_mut_slice(),
+            &trunc_requests_before_data_append,
+            &trunc_requests_after_data_append,
+            timestamp,
         );
-        self.update_rows_metadata(&rows_count, &mut sheets_to_update, &mut sheets_to_add);
+
         let data: Vec<Rows> = data_to_append.into_values().collect();
 
-        tracing::trace!("truncate_requests:\n{:?}", truncate_requests);
+        tracing::debug!(
+            "trunc_requests_before_data_append:\n{:?}",
+            trunc_requests_before_data_append
+        );
         tracing::trace!("sheets_to_update:\n{:?}", sheets_to_update);
         tracing::trace!("sheets_to_add:\n{:?}", sheets_to_add);
         tracing::trace!("data:\n{:?}", data);
+        tracing::debug!(
+            "trunc_requests_after_data_append:\n{:?}",
+            trunc_requests_after_data_append
+        );
 
         if sheets_to_add.is_empty() && sheets_to_update.is_empty() {
             return Ok(());
         }
 
-        let truncation = !truncate_requests.is_empty();
+        let truncation = !trunc_requests_before_data_append.is_empty()
+            || !trunc_requests_after_data_append.is_empty();
         self.storage
             .google
             .crud_sheets(
                 &self.spreadsheet_id,
-                truncate_requests,
+                trunc_requests_before_data_append,
                 sheets_to_update,
                 sheets_to_add,
                 data,
+                trunc_requests_after_data_append,
             )
             .await?;
 
@@ -353,10 +375,14 @@ impl AppendableLog {
     fn update_rows_metadata(
         &self,
         rows_count: &HashMap<SheetId, i32>,
-        updates: &mut Vec<UpdateSheet>,
-        sheets: &mut Vec<VirtualSheet>,
+        sheets_to_update: &mut Vec<UpdateSheet>,
+        sheets_to_add: &mut [VirtualSheet],
+        trunc_requests_before_data_append: &[CleanupSheet],
+        trunc_requests_after_data_append: &[CleanupSheet],
+        timestamp: DateTime<Utc>,
     ) {
-        for update in updates {
+        let updated: HashSet<i32> = sheets_to_update.iter().map(|s| s.sheet_id()).collect();
+        for update in sheets_to_update.iter_mut() {
             let rows = rows_count
                 .get(&update.sheet_id())
                 .expect("assert: rows counters initialized for existing sheets");
@@ -365,16 +391,39 @@ impl AppendableLog {
                 .insert(METADATA_ROW_COUNT.to_string(), rows.to_string())
         }
 
-        for sheet in sheets {
+        for new_sheet in sheets_to_add {
             let rows = rows_count
-                .get(&sheet.sheet_id())
+                .get(&new_sheet.sheet_id())
                 .expect("assert: rows counters initialized for new sheets");
-            sheet
+            new_sheet
                 .metadata_mut()
                 .insert(METADATA_ROW_COUNT.to_string(), rows.to_string());
         }
+
+        // for existing sheets we only change updated_at
+        // so it is enough to have one update per sheet
+        for truncated in trunc_requests_before_data_append
+            .iter()
+            .chain(trunc_requests_after_data_append.iter())
+        {
+            if updated.contains(&truncated.sheet_id()) {
+                continue;
+            }
+            let rows = rows_count
+                .get(&truncated.sheet_id())
+                .expect("assert: rows counters initialized for existing sheets");
+            sheets_to_update.push(UpdateSheet::new(
+                truncated.sheet_id(),
+                Metadata::new(vec![
+                    (METADATA_UPDATED_AT, timestamp.to_rfc3339()),
+                    (METADATA_ROW_COUNT, rows.to_string()),
+                ]),
+            ))
+        }
     }
 
+    #[allow(clippy::cast_precision_loss)]
+    #[allow(clippy::cast_possible_truncation)]
     fn prepare_truncate_requests(
         &mut self,
         existing_service_sheets: &HashMap<SheetId, (Sheet, Vec<String>)>,
@@ -382,8 +431,8 @@ impl AppendableLog {
         data_to_append: &HashMap<SheetId, Rows>,
         limit: f32,
         rows_count: &mut HashMap<SheetId, i32>,
-    ) -> Vec<CleanupSheet> {
-        let limit = limit as f64; // SAFE as limit is supposed to be a % so under 100.0
+    ) -> (Vec<CleanupSheet>, Vec<CleanupSheet>) {
+        let limit = f64::from(limit); // SAFE as limit is supposed to be a % so under 100.0
         for (sheet_id, rows) in data_to_append {
             *rows_count
                 .get_mut(sheet_id)
@@ -404,7 +453,10 @@ impl AppendableLog {
                 let used_rows = rows_count
                     .get(&s.sheet_id())
                     .expect("assert: rows counters were filled from existing sheets");
-                used_rows * s.column_count().expect("assert: grid sheet has columns")
+                // We estimate total actual number of cells (rows with data + blank rows after)
+                // For sheets not yet created `used_rows` > `row_count`
+                used_rows.max(&s.row_count().expect("assert: grid sheet has rows"))
+                    * s.column_count().expect("assert: grid sheet has columns")
             })
             .sum();
         let usage =
@@ -426,7 +478,7 @@ impl AppendableLog {
                     self.truncate_warning_is_sent = true;
                 }
             }
-            return vec![];
+            return (vec![], vec![]);
         }
         // remove surplus and 30% of the limit
         let cells_to_delete =
@@ -457,12 +509,14 @@ impl AppendableLog {
                 if log_name == RULES_LOG_NAME {
                     return state;
                 }
+                // For proportions we only rely on rows with data
                 let used_rows = rows_count
                     .get(&s.sheet_id())
                     .expect("assert: rows counters were filled from existing sheets");
                 let sheet_usage = SheetUsage {
                     sheet_id: s.sheet_id(),
-                    row_count: *used_rows,
+                    used_rows: *used_rows,
+                    row_count: s.row_count().expect("assert: grid sheet has rows"),
                     column_count: s.column_count().expect("assert: grid sheet has columns"),
                     updated_at: DateTime::parse_from_rfc3339(
                         s.meta_value(METADATA_UPDATED_AT)
@@ -471,7 +525,7 @@ impl AppendableLog {
                     .expect("assert: `updated_at` metadata is serialized to rfc3339")
                     .into(),
                 };
-                let sheet_cells = sheet_usage.row_count * sheet_usage.column_count;
+                let sheet_cells = sheet_usage.used_rows * sheet_usage.column_count;
                 let stat = state.entry(log_name).or_insert((0, 0.0, vec![]));
                 stat.0 += sheet_cells;
                 stat.1 = f64::from(stat.0) / f64::from(cells_used_by_service); // share of usage by the log name
@@ -480,40 +534,63 @@ impl AppendableLog {
             });
 
         tracing::debug!("usages:\n{:#?}", usages);
-        let requests = usages
-            .into_iter()
-            .flat_map(|(_, (_, log_cells_usage, mut sheets))| {
-                let mut cells_to_delete_for_log = (log_cells_usage * cells_to_delete) as i32; // SAFE as the upper bound for cells for Sheets is within i32::MAX
-                sheets.sort_unstable_by_key(|s| s.updated_at);
-                let mut requests = Vec::with_capacity(sheets.len());
-                for sheet in sheets {
-                    if cells_to_delete_for_log <= 0 {
-                        break;
-                    }
-                    let cells = sheet.row_count * sheet.column_count;
-                    if cells <= cells_to_delete_for_log {
-                        // remove the whole sheet
-                        requests.push(CleanupSheet::delete(sheet.sheet_id));
-                        cells_to_delete_for_log -= cells;
-                        rows_count.remove(&sheet.sheet_id);
-                    } else {
-                        // remove some rows
-                        let rows = sheet
-                            .row_count
-                            .min(cells_to_delete_for_log / sheet.column_count + 1);
-                        requests.push(CleanupSheet::truncate(sheet.sheet_id, rows));
-                        *rows_count
-                            .get_mut(&sheet.sheet_id)
-                            .expect("assert: rows counters were filled from existing sheets") -=
-                            rows;
-                        cells_to_delete_for_log = 0;
-                    }
+        let mut trunc_requests_before_data_append = vec![];
+        let mut trunc_requests_after_data_append = vec![];
+        for (_, (_, log_cells_usage, mut sheets)) in usages.into_iter() {
+            let cells_to_delete_for_log: f64 = log_cells_usage * cells_to_delete; // SAFE as the upper bound for cells for Sheets is within i32::MAX
+            assert!(
+                cells_to_delete_for_log < f64::from(i32::MAX),
+                "assert: the upper bound for cells for Sheets is within i32::MAX"
+            );
+            let mut cells_to_delete_for_log = cells_to_delete_for_log as i32;
+            sheets.sort_unstable_by_key(|s| s.updated_at);
+
+            for sheet in sheets {
+                if cells_to_delete_for_log <= 0 {
+                    break;
                 }
-                requests
-            })
-            .collect();
+                let cells = sheet.row_count * sheet.column_count;
+                if cells <= cells_to_delete_for_log {
+                    // remove the whole sheet
+                    trunc_requests_before_data_append.push(CleanupSheet::delete(sheet.sheet_id));
+                    cells_to_delete_for_log -= cells;
+                    rows_count.remove(&sheet.sheet_id);
+                } else {
+                    // remove some rows
+                    let rows_to_delete = sheet
+                        .used_rows
+                        .min(cells_to_delete_for_log / sheet.column_count + 1);
+                    let start_index = 1;
+                    let end_index = start_index + rows_to_delete;
+                    // delete first `rows` rows
+                    trunc_requests_before_data_append.push(CleanupSheet::truncate(
+                        sheet.sheet_id,
+                        start_index,
+                        Some(end_index),
+                    ));
+                    let left_rows = sheet.used_rows - rows_to_delete;
+                    if sheet.used_rows < sheet.row_count {
+                        // delete blank rows after left rows
+                        trunc_requests_after_data_append.push(CleanupSheet::truncate(
+                            sheet.sheet_id,
+                            left_rows,
+                            None,
+                        ));
+                    }
+
+                    *rows_count
+                        .get_mut(&sheet.sheet_id)
+                        .expect("assert: rows counters were filled from existing sheets") =
+                        left_rows;
+                    cells_to_delete_for_log = 0;
+                }
+            }
+        }
         tracing::debug!("rows counters after truncation:\n{:?}", rows_count);
-        requests
+        (
+            trunc_requests_before_data_append,
+            trunc_requests_after_data_append,
+        )
     }
 
     pub fn host_id(&self) -> &str {
@@ -556,6 +633,7 @@ impl AppendableLog {
 #[derive(Debug)]
 struct SheetUsage {
     sheet_id: SheetId,
+    used_rows: i32,
     row_count: i32,
     column_count: i32,
     updated_at: DateTime<Utc>,
@@ -563,11 +641,13 @@ struct SheetUsage {
 
 macro_rules! sheet_name_jitter {
     ($sheet_id:expr) => {
-        // we need 8 lowest significant bytes
+        // we need 8 lowest significant bits
         (*$sheet_id as u8) >> 3
     };
 }
 
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_sign_loss)]
 fn prepare_sheet_title(
     host_id: &str,
     service: &str,
@@ -609,6 +689,8 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::cast_sign_loss)]
     fn jitter() {
         let jitter = sheet_name_jitter!(&137328873_i32);
         assert!(
@@ -645,16 +727,16 @@ mod tests {
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key12"), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -702,32 +784,32 @@ mod tests {
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key23"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key23".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key12"), Datavalue::Size(400_u64)),
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name3".to_string(),
                 timestamp,
                 vec![
-                    (format!("key31"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key32"), Datavalue::Size(400_u64)),
+                    ("key31".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key32".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -773,11 +855,11 @@ mod tests {
 
         assert_eq!(
             all_sheets[3].meta_value(METADATA_SERVICE_KEY),
-            Some(&GENERAL_SERVICE_NAME.to_string())
+            Some(GENERAL_SERVICE_NAME)
         );
         assert_eq!(
             all_sheets[3].meta_value(METADATA_HOST_ID_KEY),
-            Some(&TEST_HOST_ID.to_string())
+            Some(TEST_HOST_ID)
         );
 
         assert!(all_sheets[3]
@@ -828,16 +910,16 @@ mod tests {
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key12"), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -878,16 +960,16 @@ mod tests {
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key12"), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -935,16 +1017,16 @@ mod tests {
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key12"), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -990,16 +1072,16 @@ mod tests {
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key12"), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -1046,16 +1128,16 @@ mod tests {
                 "log_name1".to_string(),
                 timestamp,
                 vec![
-                    (format!("key11"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key12"), Datavalue::Size(400_u64)),
+                    ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key12".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
             Datarow::new(
                 "log_name2".to_string(),
                 timestamp,
                 vec![
-                    (format!("key21"), Datavalue::HeatmapPercent(3_f64)),
-                    (format!("key22"), Datavalue::Size(400_u64)),
+                    ("key21".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                    ("key22".to_string(), Datavalue::Size(400_u64)),
                 ],
             ),
         ];
@@ -1108,18 +1190,18 @@ mod tests {
                 datarows.push(Datarow::new(
                     "log_name1".to_string(),
                     timestamp,
-                    vec![(format!("key11"), Datavalue::Size(400_u64))],
+                    vec![("key11".to_string(), Datavalue::Size(400_u64))],
                 ));
                 datarows.push(Datarow::new(
                     "log_name2".to_string(),
                     timestamp,
-                    vec![(format!("key21"), Datavalue::Size(400_u64))],
+                    vec![("key21".to_string(), Datavalue::Size(400_u64))],
                 ));
             }
             datarows.push(Datarow::new(
                 RULES_LOG_NAME.to_string(),
                 timestamp,
-                vec![(format!("key21"), Datavalue::Size(400_u64))],
+                vec![("key21".to_string(), Datavalue::Size(400_u64))],
             )); // 2 rows of rules (including header row) or 4 cells
 
             log.append(datarows).await.unwrap(); // 808 cells of log_name1, log_name2 and rules including headers
@@ -1136,18 +1218,16 @@ mod tests {
                 "`log_name1`, `log_name2`, `{}` sheets have been created",
                 RULES_LOG_NAME
             );
-            for i in 0..3 {
-                if all_sheets[i].title().contains("log_name1")
-                    || all_sheets[i].title().contains("log_name2")
-                {
+            for sheet in all_sheets.iter().take(3) {
+                if sheet.title().contains("log_name1") || sheet.title().contains("log_name2") {
                     assert_eq!(
-                        all_sheets[i].row_count(),
+                        sheet.row_count(),
                         Some(201),
-                        "`log_name..` contains header row and 248 rows of data"
+                        "`log_name..` contains header row and 200 rows of data"
                     );
                 } else {
                     assert_eq!(
-                        all_sheets[i].row_count(),
+                        sheet.row_count(),
                         Some(2),
                         "`{}` contains header row and 1 row of data",
                         RULES_LOG_NAME
@@ -1159,21 +1239,21 @@ mod tests {
             // now add 200 datarows => above the limit
             // for log_name1 the key has changed - new sheet will be created
 
-            let mut datarows = Vec::with_capacity(10);
+            let mut datarows = Vec::with_capacity(200);
             for _ in 0..100 {
                 datarows.push(Datarow::new(
                     "log_name1".to_string(),
                     timestamp,
-                    vec![(format!("key12"), Datavalue::Size(400_u64))],
+                    vec![("key12".to_string(), Datavalue::Size(400_u64))],
                 ));
                 datarows.push(Datarow::new(
                     "log_name2".to_string(),
                     timestamp,
-                    vec![(format!("key21"), Datavalue::Size(400_u64))],
+                    vec![("key21".to_string(), Datavalue::Size(400_u64))],
                 ));
             } // log_name1 - new sheet to be created with headers,
               // so old log_name1 - 201 rows, new log_name1 - 101 rows, log_name2 - 301 rows, rules - 2 rows - total 605 rows or 1210 cells
-              // we remove 210 and 1000 * 30% or 510 cells
+              // we remove 210 (surplus) and 1000 * 30% or 510 cells
               // cells = (201+101+301) * 2 = 1206
               // (201+101)*2/1206 = 50.08% of log_name1 or 256 cells or 128 rows
               // 301*2/1206 = 49.91% of logn_name2 or 256 cells or 128 rows
@@ -1192,21 +1272,26 @@ mod tests {
                 "`log_name1` with another key has been created"
             );
 
-            for i in 0..3 {
-                if all_sheets[i].title().contains("log_name2") {
-                    assert_eq!(all_sheets[i].row_count(), Some(174));
-                } else if all_sheets[i].title().contains("log_name1") {
+            println!("all sheets:\n{all_sheets:#?}");
+
+            for sheet in all_sheets.iter().take(3) {
+                if sheet.title().contains("log_name2") {
+                    assert_eq!(sheet.row_count(), Some(174));
+                    assert_eq!(sheet.meta_value(METADATA_ROW_COUNT), Some("174"))
+                } else if sheet.title().contains("log_name1") {
+                    assert!(sheet.row_count() == Some(73) || sheet.row_count() == Some(101),);
                     assert!(
-                        all_sheets[i].row_count() == Some(73)
-                            || all_sheets[i].row_count() == Some(101),
+                        sheet.meta_value(METADATA_ROW_COUNT) == Some("73")
+                            || sheet.meta_value(METADATA_ROW_COUNT) == Some("101")
                     );
                 } else {
                     assert_eq!(
-                        all_sheets[i].row_count(),
+                        sheet.row_count(),
                         Some(2),
                         "`{}` contains header row and 1 row of data",
                         RULES_LOG_NAME
                     );
+                    assert_eq!(sheet.meta_value(METADATA_ROW_COUNT), Some("2"))
                 }
             }
         } // a scope to drop senders

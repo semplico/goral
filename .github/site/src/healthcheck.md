@@ -21,36 +21,36 @@ endpoint = "http://127.0.0.1:9898"
 [healthcheck]
 spreadsheet_id = "<spreadsheet_id>"
 # messenger.url = "<messenger api url for sending messages>"
-# push_interval_secs = 30
+# push_interval_secs = 20
 # autotruncate_at_usage_percent = 10
 [[healthcheck.liveness]]
 # name = "http://127.0.0.1:9898" # by default the endpoint itself is used as a name
 # initial_delay_secs = 0
-# period_secs = 3
+# period_secs = 5
 type = "Http"
 endpoint = "http://127.0.0.1:9898"
-# timeout_ms = 1000 # should be less than or equal period_secs
+# timeout_ms = 3000 # should be less than or equal period_secs
 [[healthcheck.liveness]]
 # name = "ls -lha" # by default the command itself is used as a name
 # initial_delay_secs = 0
-# period_secs = 3
+# period_secs = 5
 type = "Command"
 command = ["ls", "-lha"]
-# timeout_ms = 1000 # should be less than or equal period_secs
+# timeout_ms = 3000 # should be less than or equal period_secs
 [[healthcheck.liveness]]
 # name = "[::1]:9898" # by default the tcp socket addr itself is used as a name
 # initial_delay_secs = 0
-# period_secs = 3
+# period_secs = 5
 type = "Tcp"
 endpoint = "[::1]:9898"
-# timeout_ms = 1000 # should be less than or equal period_secs
+# timeout_ms = 3000 # should be less than or equal period_secs
 [[healthcheck.liveness]]
 # name = "http://[::1]:50050" # by default the tcp socket addr itself is used as a name
 # initial_delay_secs = 0
-# period_secs = 3
+# period_secs = 5
 type = "Grpc"
 endpoint = "http://[::1]:50050"
-# timeout_ms = 1000 # should be less than or equal period_secs
+# timeout_ms = 3000 # should be less than or equal period_secs
 ```
 </details>
 

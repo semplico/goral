@@ -18,8 +18,8 @@ impl Metadata {
         Self(inner)
     }
 
-    pub fn get(&self, key: &str) -> Option<&String> {
-        self.0.get(key)
+    pub fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).map(|v| v.as_str())
     }
 
     pub fn insert(&mut self, key: String, value: String) {

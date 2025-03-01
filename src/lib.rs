@@ -1,3 +1,9 @@
+#![forbid(unsafe_code)]
+#![deny(clippy::cast_lossless)]
+#![deny(clippy::cast_possible_truncation)]
+#![deny(clippy::cast_possible_wrap)]
+#![deny(clippy::cast_precision_loss)]
+#![deny(clippy::cast_sign_loss)]
 pub mod configuration;
 pub mod google;
 pub mod http;
@@ -234,6 +240,7 @@ pub async fn welcome(
             sys.long_os_version.as_ref(),
             sys.kernel_version.as_ref(),
             sys.host_name.as_ref(),
+            // TODO other fields
         ) {
             (Some(name), Some(os_version), Some(kernel_version), Some(host_name)) => format!(
                 "{name} {os_version}(kernel {kernel_version}); hostname: {host_name}, RAM {mem}"
@@ -251,6 +258,7 @@ pub async fn welcome(
     .await
     .expect("assert: should be able to collect basic system info");
     let version = env!("CARGO_PKG_VERSION");
+    // TODO add current_exe
     let msg = format!(
         "{APP_NAME} `v{version}` has started with [api usage page](https://console.cloud.google.com/apis/dashboard?project={project_id}&show=all) and [api quota page](https://console.cloud.google.com/iam-admin/quotas?project={project_id}) at `{sys}`", 
     );
@@ -312,7 +320,7 @@ mod tests {
         assert_eq!(
             capture_datetime("INFO:2023/02/17 14:30:15 This is an info message."),
             Some(
-                NaiveDate::from_ymd_opt(2023, 02, 17)
+                NaiveDate::from_ymd_opt(2023, 2, 17)
                     .expect("test assert: static datetime")
                     .and_hms_opt(14, 30, 15)
                     .expect("test assert: static datetime")
@@ -321,7 +329,7 @@ mod tests {
         assert_eq!(
             capture_datetime("INFO:2023-02-17 14:30:15 This is an info message."),
             Some(
-                NaiveDate::from_ymd_opt(2023, 02, 17)
+                NaiveDate::from_ymd_opt(2023, 2, 17)
                     .expect("test assert: static datetime")
                     .and_hms_opt(14, 30, 15)
                     .expect("test assert: static datetime")
@@ -332,7 +340,7 @@ mod tests {
                 r#"[2m2023-11-02 12:29:51.552906[0m [32m INFO[0m [2mgoral::services::healthcheck[0m[2m:[0m starting check for Http(http://127.0.0.1:9898/)"#
             ),
             Some(
-                NaiveDate::from_ymd_opt(2023, 11, 02)
+                NaiveDate::from_ymd_opt(2023, 11, 2)
                     .expect("test assert: static datetime")
                     .and_hms_micro_opt(12, 29, 51, 552906)
                     .expect("test assert: static datetime")
@@ -343,7 +351,7 @@ mod tests {
                 r#"[2m2023/11/02 12:29:51.552906[0m [32m INFO[0m [2mgoral::services::healthcheck[0m[2m:[0m starting check for Http(http://127.0.0.1:9898/)"#
             ),
             Some(
-                NaiveDate::from_ymd_opt(2023, 11, 02)
+                NaiveDate::from_ymd_opt(2023, 11, 2)
                     .expect("test assert: static datetime")
                     .and_hms_micro_opt(12, 29, 51, 552906)
                     .expect("test assert: static datetime")
@@ -354,7 +362,7 @@ mod tests {
                 r#"[2m2023-11-02T12:29:51.552906Z[0m [32m INFO[0m [2mgoral::services::healthcheck[0m[2m:[0m starting check for Http(http://127.0.0.1:9898/)"#
             ),
             Some(
-                NaiveDate::from_ymd_opt(2023, 11, 02)
+                NaiveDate::from_ymd_opt(2023, 11, 2)
                     .expect("test assert: static datetime")
                     .and_hms_micro_opt(12, 29, 51, 552906)
                     .expect("test assert: static datetime")
@@ -365,7 +373,7 @@ mod tests {
             Some(
                 NaiveDate::from_ymd_opt(2014, 11, 28)
                     .expect("test assert: static datetime")
-                    .and_hms_opt(12, 00, 09)
+                    .and_hms_opt(12, 00, 9)
                     .expect("test assert: static datetime")
             )
         );
@@ -374,7 +382,7 @@ mod tests {
             Some(
                 NaiveDate::from_ymd_opt(2014, 11, 28)
                     .expect("test assert: static datetime")
-                    .and_hms_opt(12, 00, 09)
+                    .and_hms_opt(12, 00, 9)
                     .expect("test assert: static datetime")
             )
         );
