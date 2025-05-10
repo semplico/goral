@@ -9,7 +9,7 @@ use crate::google::datavalue::{Datarow, Datavalue};
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{Notification, Sender};
 use crate::rules::{Action, Rule, RuleCondition, RuleOutput, Triggered};
-use crate::storage::AppendableLog;
+use crate::storage::{AppendableLog, Storage};
 use crate::{jitter_duration, BoxedMessenger, Shared};
 use async_trait::async_trait;
 use futures::future::try_join_all;
@@ -159,7 +159,8 @@ fn process_rules(
 async fn rules_notifications(
     messenger: Sender,
     mut output_receiver: mpsc::Receiver<Triggered>,
-    base_url: String,
+    storage: Arc<Storage>,
+    spreadsheet_id: String,
 ) {
     while let Some(triggered) = output_receiver.recv().await {
         use Action::*;
@@ -170,8 +171,9 @@ async fn rules_notifications(
             SkipFurtherRules => panic!("assert: `skip further rules` action shouldn't be sent"),
         };
         let message = format!(
-            "```{}``` [spreadsheet]({}{}) may be created a bit later",
-            triggered.message, base_url, triggered.sheet_id
+            "{}\n[spreadsheet]({}) may be created a bit later",
+            triggered.message,
+            storage.sheet_row_url(&spreadsheet_id, triggered.sheet_id, triggered.row)
         );
         messenger.send(Notification::new(message, level)).await;
     }
@@ -258,7 +260,7 @@ pub trait Service: Send + Sync {
 
     fn truncate_at(&self) -> f32;
 
-    async fn prerun_hook(&self, log: &AppendableLog) {
+    async fn prerun_hook(&self, log: &mut AppendableLog) {
         if let Err(e) = log.healthcheck().await {
             let msg = format!(
                 "service `{}` failed to connect to Google API: `{:?}`",
@@ -275,7 +277,7 @@ pub trait Service: Send + Sync {
         let msg = format!(
             "service `{}` is running with [spreadsheet]({})",
             self.name(),
-            log.spreadsheet_baseurl(),
+            log.base_url(),
         );
         tracing::info!("{}", msg);
         self.messenger()
@@ -310,12 +312,12 @@ pub trait Service: Send + Sync {
     async fn process_task_result_on_shutdown(
         &mut self,
         result: TaskResult,
-        log: &AppendableLog,
+        log: &mut AppendableLog,
     ) -> Data {
         self.process_task_result(result, log).await
     }
 
-    async fn process_task_result(&mut self, _result: TaskResult, _log: &AppendableLog) -> Data {
+    async fn process_task_result(&mut self, _result: TaskResult, _log: &mut AppendableLog) -> Data {
         Data::Empty
     }
 
@@ -329,27 +331,44 @@ pub trait Service: Send + Sync {
         vec![]
     }
 
+    fn preprocess_datarows(&self, log: &mut AppendableLog, data: &mut Data) {
+        let service_name = self.name();
+        let host_id = log.host_id().to_string();
+        let row_counters = log.row_counters_mut();
+        match data {
+            Data::Empty | Data::Message(_) => {}
+            Data::Single(ref mut datarow) => {
+                let sheet_id = datarow.calculate_sheet_id(&host_id, service_name);
+                if datarow.row.is_none() {
+                    let current_row = *row_counters
+                        .entry(sheet_id)
+                        .and_modify(|rows| *rows += 1)
+                        .or_insert(1);
+                    datarow.set_row(current_row);
+                }
+            }
+            Data::Many(ref mut datarows) => {
+                datarows.iter_mut().for_each(|d| {
+                    let sheet_id = d.calculate_sheet_id(&host_id, service_name);
+                    if d.row.is_none() {
+                        let current_row = *row_counters
+                            .entry(sheet_id)
+                            .and_modify(|rows| *rows += 1)
+                            .or_insert(1);
+                        d.set_row(current_row);
+                    }
+                });
+            }
+        }
+    }
+
     async fn send_for_rule_processing(
         &self,
-        log: &AppendableLog,
-        data: &mut Data,
+        data: &Data,
         input_tx: &mut mpsc::Sender<RulePayload>,
     ) {
         if self.shared().messenger.is_none() {
             return;
-        }
-        let service_name = self.name();
-        let host_id = log.host_id();
-        match data {
-            Data::Empty | Data::Message(_) => {}
-            Data::Single(ref mut datarow) => {
-                datarow.sheet_id(host_id, service_name);
-            }
-            Data::Many(ref mut datarows) => {
-                datarows.iter_mut().for_each(|d| {
-                    d.sheet_id(host_id, service_name);
-                });
-            }
         }
         match input_tx.try_send(RulePayload::Data(data.clone())) {
             Err(TrySendError::Full(_)) => {
@@ -470,7 +489,7 @@ pub trait Service: Send + Sync {
     }
 
     async fn run(&mut self, mut log: AppendableLog, mut shutdown: broadcast::Receiver<u16>) {
-        self.prerun_hook(&log).await;
+        self.prerun_hook(&mut log).await;
         //  channel to collect results
         let (tx, mut data_receiver) = mpsc::channel(2 * self.channel_capacity());
         let is_shutdown = Arc::new(AtomicBool::new(false));
@@ -506,9 +525,10 @@ pub trait Service: Send + Sync {
         }
 
         if let Some(message_tx) = self.messenger() {
-            let base_url = log.spreadsheet_baseurl();
+            let storage = log.storage();
+            let spreadsheet_id = log.spreadsheet_id();
             tasks.push(tokio::spawn(async move {
-                rules_notifications(message_tx, rules_output, base_url).await
+                rules_notifications(message_tx, rules_output, storage, spreadsheet_id).await
             }));
         }
         let tasks = try_join_all(tasks);
@@ -534,8 +554,9 @@ pub trait Service: Send + Sync {
                         _ = async {
                             // drain remaining messages
                             while let Some(task_result) = data_receiver.recv().await {
-                                let mut data = self.process_task_result_on_shutdown(task_result, &log).await;
-                                self.send_for_rule_processing(&log, &mut data, &mut rules_input).await;
+                                let mut data = self.process_task_result_on_shutdown(task_result, &mut log).await;
+                                self.preprocess_datarows(&mut log, &mut data);
+                                self.send_for_rule_processing(&data, &mut rules_input).await;
                                 match data {
                                     Data::Empty | Data::Message(_) => {},
                                     Data::Single(datarow) => {accumulated_data.push(datarow);}
@@ -586,8 +607,9 @@ pub trait Service: Send + Sync {
                     self.send_updated_rules(&log, &mut rules_input).await;
                 }
                 Some(task_result) = data_receiver.recv() => {
-                    let mut data = self.process_task_result(task_result, &log).await;
-                    self.send_for_rule_processing(&log, &mut data, &mut rules_input).await;
+                    let mut data = self.process_task_result(task_result, &mut log).await;
+                    self.preprocess_datarows(&mut log, &mut data);
+                    self.send_for_rule_processing(&data, &mut rules_input).await;
                     match data {
                         Data::Empty | Data::Message(_) => {},
                         Data::Single(datarow) => {accumulated_data.push(datarow);}
@@ -661,7 +683,11 @@ mod tests {
             100.0
         }
 
-        async fn process_task_result(&mut self, result: TaskResult, _log: &AppendableLog) -> Data {
+        async fn process_task_result(
+            &mut self,
+            result: TaskResult,
+            _log: &mut AppendableLog,
+        ) -> Data {
             let TaskResult { result, .. } = result;
             result.expect("test assert: ok result is sent")
         }

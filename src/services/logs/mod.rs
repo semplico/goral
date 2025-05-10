@@ -327,12 +327,12 @@ impl Service for LogsService {
     async fn process_task_result_on_shutdown(
         &mut self,
         result: TaskResult,
-        log: &AppendableLog,
+        log: &mut AppendableLog,
     ) -> Data {
         self.process_task_result(result, log).await
     }
 
-    async fn process_task_result(&mut self, result: TaskResult, _log: &AppendableLog) -> Data {
+    async fn process_task_result(&mut self, result: TaskResult, _log: &mut AppendableLog) -> Data {
         let TaskResult { result, .. } = result;
         match result {
             Ok(data) => data,

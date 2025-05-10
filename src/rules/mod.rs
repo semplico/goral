@@ -251,28 +251,28 @@ impl Rule {
 
         let message = match (candidate_value, &self.condition, &self.value) {
             (Datavalue::Number(c), Less, Datavalue::Number(v)) if c < v => {
-                format!("{self} triggered for value {c:.4}")
+                format!("{self} triggered for value `{c:.4}`")
             }
             (Datavalue::Number(c), Less, Datavalue::Integer(v)) if c < &(f64::from(*v)) => {
-                format!("{self} triggered for value {c:.4}")
+                format!("{self} triggered for value `{c:.4}`")
             }
             (Datavalue::Integer(c), Less, Datavalue::Number(v)) if &(f64::from(*c)) < v => {
-                format!("{self} triggered for value {c}")
+                format!("{self} triggered for value `{c}`")
             }
             (Datavalue::Number(c), Greater, Datavalue::Number(v)) if c > v => {
-                format!("{self} triggered for value {c:.4}")
+                format!("{self} triggered for value `{c:.4}`")
             }
             (Datavalue::Number(c), Greater, Datavalue::Integer(v)) if c > &(f64::from(*v)) => {
-                format!("{self} triggered for value {c:.4}")
+                format!("{self} triggered for value `{c:.4}`")
             }
             (Datavalue::Integer(c), Greater, Datavalue::Number(v)) if &(f64::from(*c)) > v => {
-                format!("{self} triggered for value {c}")
+                format!("{self} triggered for value `{c}`")
             }
             (Datavalue::Integer(c), Is, Datavalue::Integer(v)) if c == v => {
-                format!("{self} triggered for value {c}")
+                format!("{self} triggered for value `{c}`")
             }
             (Datavalue::Integer(c), IsNot, Datavalue::Integer(v)) if c != v => {
-                format!("{self} triggered for value {c}")
+                format!("{self} triggered for value `{c}`")
             }
             (Datavalue::Bool(c), Is, Datavalue::Bool(v)) if c == v => format!("{self} triggered"),
             (Datavalue::Bool(c), IsNot, Datavalue::Bool(v)) if c != v => {
@@ -280,28 +280,28 @@ impl Rule {
             }
             (Datavalue::NotAvailable, Is, Datavalue::NotAvailable) => format!("{self} triggered"),
             (Datavalue::Number(c), IsNot, Datavalue::NotAvailable) => {
-                format!("{self} triggered for value {c:.4}")
+                format!("{self} triggered for value `{c:.4}`")
             }
             (Datavalue::Integer(c), IsNot, Datavalue::NotAvailable) => {
-                format!("{self} triggered for value {c}")
+                format!("{self} triggered for value `{c}`")
             }
             (Datavalue::Text(c), IsNot, Datavalue::NotAvailable) => {
-                format!("{self} triggered for value {c}")
+                format!("{self} triggered for value `{c}`")
             }
             (Datavalue::Bool(c), IsNot, Datavalue::NotAvailable) => {
-                format!("{self} triggered for value {c}")
+                format!("{self} triggered for value `{c}`")
             }
             (Datavalue::Text(c), Is, Datavalue::Text(v)) if c == v => {
-                format!("{self} triggered for value {c}")
+                format!("{self} triggered for value `{c}`")
             }
             (Datavalue::Text(c), IsNot, Datavalue::Text(v)) if c != v => {
-                format!("{self} triggered for value {c}")
+                format!("{self} triggered for value `{c}`")
             }
             (Datavalue::Text(c), Contains, Datavalue::Text(v)) if c.contains(v) => {
-                format!("{self} triggered for value {c}")
+                format!("{self} triggered for value `{c}`")
             }
             (Datavalue::Text(c), NotContains, Datavalue::Text(v)) if !c.contains(v) => {
-                format!("{self} triggered for value {c}")
+                format!("{self} triggered for value `{c}`")
             }
             _ => {
                 return RuleOutput::Process(None);
@@ -312,6 +312,7 @@ impl Rule {
             message,
             action: self.action.clone(),
             sheet_id: candidate.sheet_id,
+            row: candidate.row,
         };
         // rule triggered
         if self.action == Action::SkipFurtherRules {
@@ -360,6 +361,7 @@ pub struct RuleApplicant {
     pub log_name: String,
     pub data: HashMap<String, Datavalue>,
     pub sheet_id: SheetId,
+    pub row: u32,
 }
 
 #[derive(Debug)]
@@ -373,6 +375,7 @@ pub struct Triggered {
     pub message: String,
     pub action: Action,
     pub sheet_id: SheetId,
+    pub row: u32,
 }
 
 #[cfg(test)]
@@ -642,7 +645,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Text("some text".to_string()))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -666,7 +670,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Number(-10.0))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -690,7 +695,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Number(8.0))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -714,7 +720,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Number(10.0))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -738,7 +745,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Number(8.0))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -762,7 +770,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Number(10.0))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -786,7 +795,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Size(8))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -810,7 +820,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Size(10))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -834,7 +845,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Percent(80.0))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -858,7 +870,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Percent(100.0))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -882,7 +895,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Bool(true))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -906,7 +920,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::IntegerID(10))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -930,7 +945,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::IntegerID(10))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -954,7 +970,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::IntegerID(11))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -981,7 +998,8 @@ mod tests {
                 Datavalue::Text("34substring".to_string()),
             )],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -1005,7 +1023,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Text("substring".to_string()))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -1029,7 +1048,8 @@ mod tests {
             Utc::now().naive_utc(),
             vec![("key".to_string(), Datavalue::Text("second".to_string()))],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)
@@ -1056,7 +1076,8 @@ mod tests {
                 Datavalue::Text("34sub2string".to_string()),
             )],
         );
-        datarow.sheet_id(TEST_HOST_ID, "test");
+        datarow.calculate_sheet_id(TEST_HOST_ID, "test");
+        datarow.set_row(1);
         match rule.unwrap().apply(&datarow.into()) {
             RuleOutput::Process(Some(Triggered { action, .. })) => {
                 assert_eq!(action, Action::Info)

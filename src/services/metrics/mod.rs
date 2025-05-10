@@ -321,7 +321,7 @@ impl Service for MetricsService {
         self.truncate_at
     }
 
-    async fn process_task_result(&mut self, result: TaskResult, _: &AppendableLog) -> Data {
+    async fn process_task_result(&mut self, result: TaskResult, _: &mut AppendableLog) -> Data {
         let TaskResult { id, result } = result;
         match result {
             Ok(data) => data,

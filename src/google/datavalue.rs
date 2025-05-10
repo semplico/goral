@@ -56,6 +56,7 @@ pub struct Datarow {
     timestamp: NaiveDateTime,
     pub data: Vec<(String, Datavalue)>,
     sheet_id: Option<SheetId>,
+    pub row: Option<u32>,
 }
 
 impl Datarow {
@@ -65,10 +66,11 @@ impl Datarow {
             timestamp,
             data,
             sheet_id: None,
+            row: None,
         }
     }
 
-    pub fn sheet_id(&mut self, host_id: &str, service_name: &str) -> SheetId {
+    pub fn calculate_sheet_id(&mut self, host_id: &str, service_name: &str) -> SheetId {
         if let Some(sheet_id) = self.sheet_id {
             return sheet_id;
         }
@@ -77,6 +79,11 @@ impl Datarow {
         let sheet_id = str_to_id(&id_string);
         self.sheet_id = Some(sheet_id);
         sheet_id
+    }
+
+    pub fn sheet_id(&self) -> SheetId {
+        self.sheet_id
+            .expect("Datarow sheet_id should be calculated first")
     }
 
     pub fn keys(&self) -> Vec<&str> {
@@ -133,6 +140,11 @@ impl Datarow {
 
     pub fn log_name(&self) -> &String {
         &self.log_name
+    }
+
+    pub fn set_row(&mut self, row: u32) {
+        assert!(self.row.is_none(), "datarow row is set once");
+        self.row = Some(row);
     }
 }
 
@@ -390,7 +402,6 @@ impl From<Datarow> for RowData {
 }
 
 impl From<Datarow> for RuleApplicant {
-    // TODO convert only data, which is actually used in rules processing
     fn from(val: Datarow) -> Self {
         use Datavalue::*;
         let Datarow {
@@ -398,10 +409,13 @@ impl From<Datarow> for RuleApplicant {
             timestamp,
             data,
             sheet_id,
+            row,
         } = val;
         let sheet_id = sheet_id.expect(
             "assert: sheet id should be initialized before the rule applicant transformation",
         );
+        let row = row
+            .expect("assert: row should be initialized before the rule applicant transformation");
         // convert datavalues into types supported by rules with O(1) access
         let data = data
             .into_iter()
@@ -428,6 +442,7 @@ impl From<Datarow> for RuleApplicant {
             log_name,
             data,
             sheet_id,
+            row,
         }
     }
 }
@@ -489,7 +504,7 @@ mod tests {
                 ("disk_free".to_string(), Datavalue::Size(400_u64)),
             ],
         );
-        assert_eq!(895475598, datarow.sheet_id("host1", "system"));
+        assert_eq!(895475598, datarow.calculate_sheet_id("host1", "system"));
     }
 
     #[test]
