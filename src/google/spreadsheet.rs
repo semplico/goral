@@ -244,6 +244,10 @@ impl SpreadsheetAPI {
         state.update(req, spreadsheet_id).await
     }
 
+    pub fn sheet_row_url(&self, spreadsheet_id: &str, sheet_id: SheetId, row: u32) -> String {
+        format!("{GOOGLE_SHEET_BASE}{spreadsheet_id}#gid={sheet_id}&range={row}:{row}")
+    }
+
     pub fn sheet_url(&self, spreadsheet_id: &str, sheet_id: SheetId) -> String {
         format!("{GOOGLE_SHEET_BASE}{spreadsheet_id}#gid={sheet_id}")
     }

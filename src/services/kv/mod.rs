@@ -320,7 +320,7 @@ impl Service for KvService {
     }
 
     async fn run(&mut self, mut log: AppendableLog, mut shutdown: broadcast::Receiver<u16>) {
-        self.prerun_hook(&log).await;
+        self.prerun_hook(&mut log).await;
         let (tx, mut data_receiver) = mpsc::channel(1);
         let mut tasks = vec![];
         let is_shutdown = Arc::new(AtomicBool::new(false));
@@ -355,9 +355,10 @@ impl Service for KvService {
             }));
         }
         if let Some(message_tx) = self.messenger() {
-            let base_url = log.spreadsheet_baseurl();
+            let storage = log.storage();
+            let spreadsheet_id = log.spreadsheet_id();
             tasks.push(tokio::spawn(async move {
-                rules_notifications(message_tx, rules_output, base_url).await
+                rules_notifications(message_tx, rules_output, storage, spreadsheet_id).await
             }));
         }
         let mut rules_update_interval = tokio::time::interval(self.rules_update_interval());
@@ -387,7 +388,8 @@ impl Service for KvService {
                             while let Some(append_request) = data_receiver.recv().await {
                                 let AppendRequest{datarows, reply_to} = append_request;
                                 let mut data = Data::Many(datarows);
-                                self.send_for_rule_processing(&log, &mut data, &mut rules_input).await;
+                                self.preprocess_datarows(&mut log, &mut data);
+                                self.send_for_rule_processing(&data, &mut rules_input).await;
                                 let Data::Many(datarows) = data else {panic!("assert: packing/unpacking of KV data")};
                                 let res = log.append_no_retry(datarows).await;
                                 if reply_to.send(res).is_err() {
@@ -406,7 +408,8 @@ impl Service for KvService {
                 Some(append_request) = data_receiver.recv() => {
                     let AppendRequest{datarows, reply_to} = append_request;
                     let mut data = Data::Many(datarows);
-                    self.send_for_rule_processing(&log, &mut data, &mut rules_input).await;
+                    self.preprocess_datarows(&mut log, &mut data);
+                    self.send_for_rule_processing(&data, &mut rules_input).await;
                     let Data::Many(datarows) = data else {panic!("assert: packing/unpacking of KV data")};
                     let res = log.append_no_retry(datarows).await;
                     if reply_to.send(res).is_err() {
