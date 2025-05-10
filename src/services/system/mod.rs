@@ -25,10 +25,12 @@ use tokio::task::JoinHandle;
 pub const SYSTEM_SERVICE_NAME: &str = "system";
 #[cfg(target_os = "linux")]
 const MAX_BYTES_SSH_VERSIONS_OUTPUT: usize = 2_usize.pow(16); // ~65 KiB
+#[cfg(target_os = "linux")]
+const SSH_VERSIONS_URL: &str = "http://changelogs.ubuntu.com/changelogs/pool/main/o/openssh/";
 
 #[cfg(target_os = "linux")]
 async fn ssh_versions() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let url = "http://changelogs.ubuntu.com/changelogs/pool/main/o/openssh/"
+    let url = SSH_VERSIONS_URL
         .parse()
         .expect("assert: ssh versions url is correct");
     let client =
@@ -225,7 +227,7 @@ impl SystemService {
                     }
                     match rx.await {
                         Ok(Ok(true)) => {
-                            let msg = "openssh patch version is outdated, update with `sudo apt update && sudo apt install openssh-server`".to_string();
+                            let msg = format!("openssh patch version is [outdated]({SSH_VERSIONS_URL}), update with `sudo apt update && sudo apt install openssh-server`, you may also need to update packages repository sources");
                             tracing::warn!("{}", msg);
                             messenger.warn(msg).await;
                         },
