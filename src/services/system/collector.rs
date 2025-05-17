@@ -4,7 +4,7 @@ use chrono::{DateTime, NaiveDateTime};
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
-use sysinfo::{Networks, Pid, Process as SysinfoProcess, System, Uid, Users};
+use sysinfo::{Networks, Pid, Process as SysinfoProcess, ProcessesToUpdate, System, Uid, Users};
 use tracing::Level;
 
 pub const BASIC_LOG: &str = "basic";
@@ -54,7 +54,7 @@ impl ProcessInfo {
                     .file_name()
                     .map(|filename| filename.to_string_lossy().into_owned())
             }))
-            .unwrap_or_else(|| sysinfo_process.name().to_string());
+            .unwrap_or_else(|| sysinfo_process.name().to_string_lossy().into_owned());
 
         // SAFE: memory use should be under 100.0
         // roundings errors are acceptable here
@@ -195,7 +195,7 @@ pub(super) fn initialize() -> System {
     sysinfo::set_open_files_limit(0);
     let mut sys = System::new();
     sys.refresh_memory();
-    sys.refresh_processes();
+    sys.refresh_processes(ProcessesToUpdate::All, true);
     sys
 }
 
@@ -205,9 +205,10 @@ pub struct SystemInfo {
     pub kernel_version: Option<String>,
     pub host_name: Option<String>,
     pub total_memory: u64,
+    pub cpu_arch: String,
+    pub boot_time: u64,
 }
 
-// TODO cpu_arch(), boot_time()
 pub fn system_info() -> SystemInfo {
     let sys = initialize();
     SystemInfo {
@@ -216,6 +217,8 @@ pub fn system_info() -> SystemInfo {
         kernel_version: System::kernel_version(),
         host_name: System::host_name(),
         total_memory: sys.total_memory(),
+        cpu_arch: System::cpu_arch(),
+        boot_time: System::boot_time(),
     }
 }
 

@@ -31,8 +31,8 @@ config = { version = "0.15", default-features = false, features = ["toml"] }
 futures = { version = "0.3", default-features = false}
 getrandom = { version = "0.3", default-features = false}
 google-sheets4 = { version = "6.0", default-features = false, features = ["yup-oauth2"]}
-http = { version = "1.2", default-features = false}
-http-body-util = { version = "0.1.2", default-features = false}
+http = { version = "1.3", default-features = false}
+http-body-util = { version = "0.1.3", default-features = false}
 hyper = { version = "1", default-features = false, features = ["http1", "http2", "client", "server"]} # using the same version as google-sheets4
 hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "native-tokio", "logging"]} # using the same version as google-sheets4
 hyper-util = { version = "0.1", default-features = false}
@@ -44,9 +44,8 @@ serde = { version = "^1.0", default-features = false}
 serde_derive = { version = "^1.0", default-features = false}
 serde_json = { version = "^1.0", default-features = false}
 serde_valid = { version = "1.0", default-features = false, features = ["toml"] }
-#sysinfo = { version = "0.30.13", default-features = false, features = ["system", "network", "user", "disk"] }
-sysinfo = { version = "0.30.13", default-features = false }
-tokio = { version = "^1.43", default-features = false, features = ["sync", "signal", "io-std", "process", "net"] }
+sysinfo = { version = "0.35", default-features = false, features = ["system", "network", "user", "disk"]  }
+tokio = { version = "^1.45", default-features = false, features = ["sync", "signal", "io-std", "process", "net"] }
 tonic = { version = "^0.12", default-features = false, features = ["transport", "prost"]}
 tonic-health = { version = "0.12", default-features = false, features = ["transport"]}
 tracing = { version = "0.1", default-features = false}
