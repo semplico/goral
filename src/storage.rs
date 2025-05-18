@@ -1184,17 +1184,9 @@ mod tests {
                 ],
             ),
         ];
-        let host_id = log.host_id().to_string();
-        let row_counters = log.row_counters_mut();
+
         datarows.iter_mut().for_each(|datarow| {
-            let sheet_id = datarow.calculate_sheet_id(&host_id, GENERAL_SERVICE_NAME);
-            if datarow.row.is_none() {
-                let current_row = *row_counters
-                    .entry(sheet_id)
-                    .and_modify(|rows| *rows += 1)
-                    .or_insert(2);
-                datarow.set_row(current_row);
-            }
+            log.preprocess_datarow(datarow, GENERAL_SERVICE_NAME);
         });
 
         let handle = tokio::task::spawn(async move {

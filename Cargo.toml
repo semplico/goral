@@ -1,6 +1,6 @@
 [package]
 name = "goral"
-version = "0.1.11"
+version = "0.1.12"
 edition = "2021"
 author = "Maksim Ryndin"
 license = "Apache-2.0"
