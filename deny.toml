@@ -18,7 +18,7 @@ db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "deny"
 ignore = [
-    "RUSTSEC-2025-0007",
+    "RUSTSEC-2024-0436" # paste is no longer maintained
 ]
 
 [licenses]
@@ -26,12 +26,20 @@ allow = [
     "MIT",
     "Apache-2.0",
     "BSD-3-Clause",
+    "BSD-2-Clause",
+    "CC-BY-1.0",
+    "CC-BY-2.0",
+    "CC-BY-3.0",
+    "CC-BY-4.0",
     "ISC",
-    "Unicode-3.0",
     "OpenSSL",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Zlib",
 ]
 confidence-threshold = 0.8
 exceptions = []
+unused-allowed-license = "allow"
 
 [[licenses.clarify]]
 name = "ring"

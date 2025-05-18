@@ -316,7 +316,7 @@ impl HealthcheckService {
         &self,
         liveness: &Liveness,
         is_alive: bool,
-        datarow: &mut Datarow,
+        datarow: &Datarow,
         log: &AppendableLog,
     ) {
         let (level, message) = if is_alive {
@@ -328,7 +328,7 @@ impl HealthcheckService {
             (Level::ERROR,
             format!(
                 "Liveness probe for `{:?}` failed with an output at the [spreadsheet]({}), the sheet may be created a bit later",
-                liveness, log.sheet_url(datarow.sheet_id(log.host_id(), self.name()))))
+                liveness, log.row_url(datarow.sheet_id(), datarow.row.expect("assert: Datarow row should be set"))))
         };
         if let Some(messenger) = self.messenger() {
             messenger.send_nonblock(Notification::new(message, level));
@@ -377,7 +377,7 @@ impl Service for HealthcheckService {
     async fn process_task_result_on_shutdown(
         &mut self,
         result: TaskResult,
-        _: &AppendableLog,
+        _: &mut AppendableLog,
     ) -> Data {
         let TaskResult { id: _, result } = result;
         match result {
@@ -386,7 +386,7 @@ impl Service for HealthcheckService {
         }
     }
 
-    async fn process_task_result(&mut self, result: TaskResult, log: &AppendableLog) -> Data {
+    async fn process_task_result(&mut self, result: TaskResult, log: &mut AppendableLog) -> Data {
         let TaskResult { id, result } = result;
         let (is_alive, mut datarow) = match result {
             Ok(Data::Single(datarow)) => (true, datarow),
@@ -395,10 +395,11 @@ impl Service for HealthcheckService {
                 "assert: healthcheck result contains single datarow both for error and for ok"
             ),
         };
+        log.preprocess_datarow(&mut datarow, self.name());
         if self.liveness_previous_state[id].is_none()
             || self.liveness_previous_state[id] != Some(is_alive)
         {
-            self.send_message(&self.liveness[id], is_alive, &mut datarow, log)
+            self.send_message(&self.liveness[id], is_alive, &datarow, log)
                 .await;
             self.liveness_previous_state[id] = Some(is_alive);
         }

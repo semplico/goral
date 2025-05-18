@@ -235,24 +235,23 @@ pub async fn welcome(
         } else {
             format!("{mem}M")
         };
+        let cpu_arch = sys.cpu_arch.as_str();
+        let boot_time = DateTime::from_timestamp(sys.boot_time.try_into().expect("assert: boot time fits i64"), 0).expect("assert: boot time is a correct unix timestamp").to_rfc2822();
         match (
-            sys.name.as_ref(),
             sys.long_os_version.as_ref(),
             sys.kernel_version.as_ref(),
             sys.host_name.as_ref(),
-            // TODO other fields
         ) {
-            (Some(name), Some(os_version), Some(kernel_version), Some(host_name)) => format!(
-                "{name} {os_version}(kernel {kernel_version}); hostname: {host_name}, RAM {mem}"
+            (Some(os_version), Some(kernel_version), Some(host_name)) => format!(
+                "{cpu_arch} {os_version}({kernel_version}); hostname: {host_name}, RAM {mem}; boot time: {boot_time}"
             ),
-            (Some(name), Some(os_version), None, Some(host_name)) => {
-                format!("{name} {os_version}; hostname: {host_name}, RAM {mem}")
+            (Some(os_version), None, Some(host_name)) => {
+                format!("{cpu_arch} {os_version}; hostname: {host_name}, RAM {mem}; boot time: {boot_time}")
             }
-            (Some(name), Some(os_version), None, None) => {
-                format!("{name} {os_version}; RAM {mem}")
+            (Some(os_version), None, None) => {
+                format!("{cpu_arch} {os_version}; RAM {mem}; boot time: {boot_time}")
             }
-            (Some(name), None, None, None) => format!("{name}; RAM {mem}"),
-            _ => format!("RAM {mem}"),
+            _ => format!("{cpu_arch}; RAM {mem}; boot time: {boot_time}"),
         }
     })
     .await

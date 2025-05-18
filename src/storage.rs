@@ -36,6 +36,10 @@ impl Storage {
         );
         Self { host_id, google }
     }
+
+    pub fn sheet_row_url(&self, spreadsheet_id: &str, sheet_id: SheetId, row: u32) -> String {
+        self.google.sheet_row_url(spreadsheet_id, sheet_id, row)
+    }
 }
 
 #[derive(Debug)]
@@ -66,6 +70,7 @@ pub struct AppendableLog {
     messenger: Option<Sender>,
     truncate_at: f32,
     truncate_warning_is_sent: bool,
+    row_counters: HashMap<SheetId, u32>,
 }
 
 impl AppendableLog {
@@ -86,10 +91,13 @@ impl AppendableLog {
             messenger,
             truncate_at,
             truncate_warning_is_sent: false,
+            row_counters: HashMap::new(),
         }
     }
 
-    async fn fetch_sheets(&self) -> Result<HashMap<SheetId, (Sheet, Vec<String>)>, StorageError> {
+    async fn fetch_sheets(
+        &mut self,
+    ) -> Result<HashMap<SheetId, (Sheet, Vec<String>)>, StorageError> {
         let basic_metadata = Metadata::new(vec![
             (METADATA_HOST_ID_KEY, self.storage.host_id.to_string()),
             (METADATA_SERVICE_KEY, self.service.to_string()),
@@ -100,6 +108,20 @@ impl AppendableLog {
             .google
             .sheets_filtered_by_metadata(&self.spreadsheet_id, &basic_metadata)
             .await?;
+
+        self.row_counters = existing_service_sheets
+            .iter()
+            .map(|sheet| {
+                (
+                    sheet.sheet_id(),
+                    sheet
+                        .meta_value(METADATA_ROW_COUNT)
+                        .expect("assert: a managed grid sheet has rows metadata")
+                        .parse()
+                        .expect("assert: rows metadata is a non-negative integer"),
+                )
+            })
+            .collect();
 
         Ok(existing_service_sheets
             .into_iter()
@@ -115,7 +137,7 @@ impl AppendableLog {
             .collect())
     }
 
-    pub async fn healthcheck(&self) -> Result<(), StorageError> {
+    pub async fn healthcheck(&mut self) -> Result<(), StorageError> {
         self.fetch_sheets().await?;
         Ok(())
     }
@@ -135,8 +157,8 @@ impl AppendableLog {
         let sheet_ids = datarows
             .iter_mut()
             .map(|d| {
-                let sheet_id = d.sheet_id(&self.storage.host_id, &self.service);
-                self.sheet_url(sheet_id)
+                let sheet_id = d.calculate_sheet_id(&self.storage.host_id, &self.service);
+                self.row_url(sheet_id, d.row.expect("assert: row should be set"))
             })
             .collect();
         self.core_append(datarows, None).await?;
@@ -145,7 +167,7 @@ impl AppendableLog {
 
     // https://developers.google.com/sheets/api/limits#example-algorithm
     async fn timed_fetch_sheets(
-        &self,
+        &mut self,
         maximum_backoff: Duration,
     ) -> Result<HashMap<SheetId, (Sheet, Vec<String>)>, StorageError> {
         let mut total_time = Duration::from_millis(0);
@@ -208,20 +230,6 @@ impl AppendableLog {
 
         tracing::trace!("existing sheets:\n{:?}", existing_sheets);
 
-        let mut rows_count: HashMap<SheetId, i32> = existing_sheets
-            .iter()
-            .map(|(&sheet_id, (sheet, _))| {
-                (
-                    sheet_id,
-                    sheet
-                        .meta_value(METADATA_ROW_COUNT)
-                        .expect("assert: a managed grid sheet has rows metadata")
-                        .parse()
-                        .expect("assert: rows metadata is a signed integer"),
-                )
-            })
-            .collect();
-
         // Check for sheet type to be grid
         let mut sheets_to_create: HashMap<SheetId, (VirtualSheet, Vec<String>)> = HashMap::new();
         let mut data_to_append: HashMap<SheetId, Rows> = HashMap::new();
@@ -230,7 +238,7 @@ impl AppendableLog {
         let timestamp = Utc::now();
 
         for mut datarow in datarows.into_iter() {
-            let sheet_id = datarow.sheet_id(&self.storage.host_id, &self.service);
+            let sheet_id = datarow.calculate_sheet_id(&self.storage.host_id, &self.service);
 
             if self.rules_sheet_id.is_none() && datarow.log_name() == RULES_LOG_NAME {
                 self.rules_sheet_id = Some(sheet_id);
@@ -270,7 +278,6 @@ impl AppendableLog {
                     ))
                     .push(datarow.into());
             } else {
-                let sheet_id = datarow.sheet_id(&self.storage.host_id, &self.service);
                 let title = prepare_sheet_title(
                     &self.storage.host_id,
                     &self.service,
@@ -298,8 +305,10 @@ impl AppendableLog {
                 if datarow.log_name() == RULES_LOG_NAME {
                     sheet = sheet.with_dropdowns(rules_dropdowns());
                 }
-                let row_count = sheet.row_count().expect("assert: grid sheet has row count");
-                rows_count.insert(sheet_id, 1); // one for header row
+                let row_count = sheet
+                    .row_count()
+                    .expect("assert: a grid sheet has row count");
+                self.row_counters.insert(sheet_id, 1); // one for header row
                 sheets_to_create.insert(
                     sheet_id,
                     (
@@ -323,10 +332,8 @@ impl AppendableLog {
                 &sheets_to_add,
                 &data_to_append,
                 self.truncate_at,
-                &mut rows_count,
             );
         self.update_rows_metadata(
-            &rows_count,
             &mut sheets_to_update,
             sheets_to_add.as_mut_slice(),
             &trunc_requests_before_data_append,
@@ -374,7 +381,6 @@ impl AppendableLog {
 
     fn update_rows_metadata(
         &self,
-        rows_count: &HashMap<SheetId, i32>,
         sheets_to_update: &mut Vec<UpdateSheet>,
         sheets_to_add: &mut [VirtualSheet],
         trunc_requests_before_data_append: &[CleanupSheet],
@@ -383,7 +389,8 @@ impl AppendableLog {
     ) {
         let updated: HashSet<i32> = sheets_to_update.iter().map(|s| s.sheet_id()).collect();
         for update in sheets_to_update.iter_mut() {
-            let rows = rows_count
+            let rows = self
+                .row_counters
                 .get(&update.sheet_id())
                 .expect("assert: rows counters initialized for existing sheets");
             update
@@ -392,7 +399,8 @@ impl AppendableLog {
         }
 
         for new_sheet in sheets_to_add {
-            let rows = rows_count
+            let rows = self
+                .row_counters
                 .get(&new_sheet.sheet_id())
                 .expect("assert: rows counters initialized for new sheets");
             new_sheet
@@ -409,7 +417,8 @@ impl AppendableLog {
             if updated.contains(&truncated.sheet_id()) {
                 continue;
             }
-            let rows = rows_count
+            let rows = self
+                .row_counters
                 .get(&truncated.sheet_id())
                 .expect("assert: rows counters initialized for existing sheets");
             sheets_to_update.push(UpdateSheet::new(
@@ -430,16 +439,20 @@ impl AppendableLog {
         sheets_to_create: &[VirtualSheet],
         data_to_append: &HashMap<SheetId, Rows>,
         limit: f32,
-        rows_count: &mut HashMap<SheetId, i32>,
     ) -> (Vec<CleanupSheet>, Vec<CleanupSheet>) {
         let limit = f64::from(limit); // SAFE as limit is supposed to be a % so under 100.0
         for (sheet_id, rows) in data_to_append {
-            *rows_count
+            let new_rows_count: u32 = rows
+                .new_rows_count()
+                .try_into()
+                .expect("assert: new_rows_count is non-negative");
+            *self
+                .row_counters
                 .get_mut(sheet_id)
                 .expect("assert: rows counters initialized for existing and new sheets") +=
-                rows.new_rows_count()
+                new_rows_count;
         }
-        tracing::debug!("rows counters:\n{:?}", rows_count);
+        tracing::debug!("rows counters:\n{:?}", self.row_counters);
 
         let cells_used_by_service: i32 = existing_service_sheets
             .values()
@@ -450,12 +463,16 @@ impl AppendableLog {
                     .filter_map(|vs| (vs.sheet_type() == SheetType::Grid).then_some(vs.sheet())),
             )
             .map(|s| {
-                let used_rows = rows_count
+                let used_rows = self
+                    .row_counters
                     .get(&s.sheet_id())
                     .expect("assert: rows counters were filled from existing sheets");
+                let used_rows: i32 = (*used_rows)
+                    .try_into()
+                    .expect("assert: used_rows count fits into i32");
                 // We estimate total actual number of cells (rows with data + blank rows after)
                 // For sheets not yet created `used_rows` > `row_count`
-                used_rows.max(&s.row_count().expect("assert: grid sheet has rows"))
+                used_rows.max(s.row_count().expect("assert: grid sheet has rows"))
                     * s.column_count().expect("assert: grid sheet has columns")
             })
             .sum();
@@ -470,7 +487,7 @@ impl AppendableLog {
 
         if usage < limit {
             if usage > 0.8 * limit && !self.truncate_warning_is_sent {
-                let url = self.spreadsheet_baseurl();
+                let url = self.base_url();
                 let message = format!("current [spreadsheet]({url}) usage `{usage:.2}%` for service `{}` is approaching a limit `{limit}%`, the data will be truncated, copy it if needed or consider using a separate spreadsheet for this service with a higher [storage quota](https://maksimryndin.github.io/goral/services.html#storage-quota)", self.service);
                 tracing::warn!("{}", message);
                 if let Some(messenger) = self.messenger.as_ref() {
@@ -510,12 +527,15 @@ impl AppendableLog {
                     return state;
                 }
                 // For proportions we only rely on rows with data
-                let used_rows = rows_count
+                let used_rows = self
+                    .row_counters
                     .get(&s.sheet_id())
                     .expect("assert: rows counters were filled from existing sheets");
                 let sheet_usage = SheetUsage {
                     sheet_id: s.sheet_id(),
-                    used_rows: *used_rows,
+                    used_rows: (*used_rows)
+                        .try_into()
+                        .expect("assert: used_rows count fits into i32"),
                     row_count: s.row_count().expect("assert: grid sheet has rows"),
                     column_count: s.column_count().expect("assert: grid sheet has columns"),
                     updated_at: DateTime::parse_from_rfc3339(
@@ -554,10 +574,10 @@ impl AppendableLog {
                     // remove the whole sheet
                     trunc_requests_before_data_append.push(CleanupSheet::delete(sheet.sheet_id));
                     cells_to_delete_for_log -= cells;
-                    rows_count.remove(&sheet.sheet_id);
+                    self.row_counters.remove(&sheet.sheet_id);
                 } else {
                     // remove some rows
-                    let rows_to_delete = sheet
+                    let rows_to_delete: i32 = sheet
                         .used_rows
                         .min(cells_to_delete_for_log / sheet.column_count + 1);
                     let start_index = 1;
@@ -578,15 +598,18 @@ impl AppendableLog {
                         ));
                     }
 
-                    *rows_count
+                    *self
+                        .row_counters
                         .get_mut(&sheet.sheet_id)
                         .expect("assert: rows counters were filled from existing sheets") =
-                        left_rows;
+                        left_rows
+                            .try_into()
+                            .expect("left_rows count is non-negative");
                     cells_to_delete_for_log = 0;
                 }
             }
         }
-        tracing::debug!("rows counters after truncation:\n{:?}", rows_count);
+        tracing::debug!("rows counters after truncation:\n{:?}", self.row_counters);
         (
             trunc_requests_before_data_append,
             trunc_requests_after_data_append,
@@ -597,16 +620,36 @@ impl AppendableLog {
         &self.storage.host_id
     }
 
-    pub fn sheet_url(&self, sheet_id: SheetId) -> String {
-        self.storage
-            .google
-            .sheet_url(&self.spreadsheet_id, sheet_id)
+    pub fn preprocess_datarow(&mut self, datarow: &mut Datarow, service_name: &str) {
+        let host_id = self.host_id();
+        let sheet_id = datarow.calculate_sheet_id(host_id, service_name);
+        if datarow.row.is_none() {
+            let current_row = *self
+                .row_counters
+                .entry(sheet_id)
+                .and_modify(|rows| *rows += 1)
+                .or_insert(2);
+            datarow.set_row(current_row);
+        }
     }
 
-    pub fn spreadsheet_baseurl(&self) -> String {
+    pub fn storage(&self) -> Arc<Storage> {
+        self.storage.clone()
+    }
+
+    pub fn row_url(&self, sheet_id: SheetId, row: u32) -> String {
+        self.storage
+            .sheet_row_url(&self.spreadsheet_id, sheet_id, row)
+    }
+
+    pub fn base_url(&self) -> String {
         self.storage
             .google
             .spreadsheet_baseurl(&self.spreadsheet_id)
+    }
+
+    pub fn spreadsheet_id(&self) -> String {
+        self.spreadsheet_id.to_string()
     }
 
     pub async fn get_rules(&self) -> Result<Vec<Rule>, StorageError> {
@@ -1123,7 +1166,7 @@ mod tests {
             .expect("test assert: static time");
 
         // adding two new log_name-keys rows
-        let datarows = vec![
+        let mut datarows = vec![
             Datarow::new(
                 "log_name1".to_string(),
                 timestamp,
@@ -1141,6 +1184,10 @@ mod tests {
                 ],
             ),
         ];
+
+        datarows.iter_mut().for_each(|datarow| {
+            log.preprocess_datarow(datarow, GENERAL_SERVICE_NAME);
+        });
 
         let handle = tokio::task::spawn(async move {
             assert!(

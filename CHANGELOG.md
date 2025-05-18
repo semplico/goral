@@ -1,3 +1,7 @@
+* 0.1.12
+    * spreadsheet links with a specific row for healthchecks and rules triggers
+    * upgrade all dependencies
+
 * 0.1.11
     * refactor Github flows
     * scrape-push rule for queues sizes takes into account max append duration timeout
