@@ -18,7 +18,7 @@ db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "deny"
 ignore = [
-    "RUSTSEC-2024-0436"
+    "RUSTSEC-2024-0436" # paste is no longer maintained
 ]
 
 [licenses]

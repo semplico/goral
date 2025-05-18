@@ -332,31 +332,14 @@ pub trait Service: Send + Sync {
     }
 
     fn preprocess_datarows(&self, log: &mut AppendableLog, data: &mut Data) {
-        let service_name = self.name();
-        let host_id = log.host_id().to_string();
-        let row_counters = log.row_counters_mut();
         match data {
             Data::Empty | Data::Message(_) => {}
             Data::Single(ref mut datarow) => {
-                let sheet_id = datarow.calculate_sheet_id(&host_id, service_name);
-                if datarow.row.is_none() {
-                    let current_row = *row_counters
-                        .entry(sheet_id)
-                        .and_modify(|rows| *rows += 1)
-                        .or_insert(1);
-                    datarow.set_row(current_row);
-                }
+                log.preprocess_datarow(datarow, self.name());
             }
             Data::Many(ref mut datarows) => {
-                datarows.iter_mut().for_each(|d| {
-                    let sheet_id = d.calculate_sheet_id(&host_id, service_name);
-                    if d.row.is_none() {
-                        let current_row = *row_counters
-                            .entry(sheet_id)
-                            .and_modify(|rows| *rows += 1)
-                            .or_insert(1);
-                        d.set_row(current_row);
-                    }
+                datarows.iter_mut().for_each(|datarow| {
+                    log.preprocess_datarow(datarow, self.name());
                 });
             }
         }

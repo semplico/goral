@@ -395,13 +395,7 @@ impl Service for HealthcheckService {
                 "assert: healthcheck result contains single datarow both for error and for ok"
             ),
         };
-        let sheet_id = datarow.calculate_sheet_id(log.host_id(), self.name());
-        let row_counters = log.row_counters_mut();
-        let current_row = *row_counters
-            .entry(sheet_id)
-            .and_modify(|rows| *rows += 1)
-            .or_insert(1);
-        datarow.set_row(current_row);
+        log.preprocess_datarow(&mut datarow, self.name());
         if self.liveness_previous_state[id].is_none()
             || self.liveness_previous_state[id] != Some(is_alive)
         {

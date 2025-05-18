@@ -118,7 +118,7 @@ impl AppendableLog {
                         .meta_value(METADATA_ROW_COUNT)
                         .expect("assert: a managed grid sheet has rows metadata")
                         .parse()
-                        .expect("assert: rows metadata is a signed integer"),
+                        .expect("assert: rows metadata is a non-negative integer"),
                 )
             })
             .collect();
@@ -135,10 +135,6 @@ impl AppendableLog {
                 (s.sheet_id(), (s, keys))
             })
             .collect())
-    }
-
-    pub fn row_counters_mut(&mut self) -> &mut HashMap<SheetId, u32> {
-        &mut self.row_counters
     }
 
     pub async fn healthcheck(&mut self) -> Result<(), StorageError> {
@@ -309,7 +305,9 @@ impl AppendableLog {
                 if datarow.log_name() == RULES_LOG_NAME {
                     sheet = sheet.with_dropdowns(rules_dropdowns());
                 }
-                let row_count = sheet.row_count().expect("assert: grid sheet has row count");
+                let row_count = sheet
+                    .row_count()
+                    .expect("assert: a grid sheet has row count");
                 self.row_counters.insert(sheet_id, 1); // one for header row
                 sheets_to_create.insert(
                     sheet_id,
@@ -620,6 +618,19 @@ impl AppendableLog {
 
     pub fn host_id(&self) -> &str {
         &self.storage.host_id
+    }
+
+    pub fn preprocess_datarow(&mut self, datarow: &mut Datarow, service_name: &str) {
+        let host_id = self.host_id();
+        let sheet_id = datarow.calculate_sheet_id(host_id, service_name);
+        if datarow.row.is_none() {
+            let current_row = *self
+                .row_counters
+                .entry(sheet_id)
+                .and_modify(|rows| *rows += 1)
+                .or_insert(2);
+            datarow.set_row(current_row);
+        }
     }
 
     pub fn storage(&self) -> Arc<Storage> {
@@ -1181,7 +1192,7 @@ mod tests {
                 let current_row = *row_counters
                     .entry(sheet_id)
                     .and_modify(|rows| *rows += 1)
-                    .or_insert(1);
+                    .or_insert(2);
                 datarow.set_row(current_row);
             }
         });
