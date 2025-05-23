@@ -388,6 +388,9 @@ impl AppendableLog {
         timestamp: DateTime<Utc>,
     ) {
         let updated: HashSet<i32> = sheets_to_update.iter().map(|s| s.sheet_id()).collect();
+        tracing::debug!("sheets to update: {sheets_to_update:?}");
+        tracing::debug!("sheets to add: {sheets_to_add:?}");
+        tracing::debug!("row counters: {:?}", self.row_counters);
         for update in sheets_to_update.iter_mut() {
             let rows = self
                 .row_counters
