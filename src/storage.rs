@@ -411,6 +411,10 @@ impl AppendableLog {
                 .insert(METADATA_ROW_COUNT.to_string(), rows.to_string());
         }
 
+        tracing::debug!(
+            "trunc_requests_before_data_append:\n{trunc_requests_before_data_append:?}"
+        );
+        tracing::debug!("trunc_requests_after_data_append:\n{trunc_requests_after_data_append:?}");
         // for existing sheets we only change updated_at
         // so it is enough to have one update per sheet
         for truncated in trunc_requests_before_data_append
@@ -423,6 +427,13 @@ impl AppendableLog {
             let rows = self
                 .row_counters
                 .get(&truncated.sheet_id())
+                .or_else(|| {
+                    tracing::error!(
+                        "cannot find a row counter for sheet {}",
+                        &truncated.sheet_id()
+                    );
+                    None
+                })
                 .expect("assert: rows counters initialized for existing sheets");
             sheets_to_update.push(UpdateSheet::new(
                 truncated.sheet_id(),
