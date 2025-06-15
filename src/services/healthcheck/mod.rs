@@ -37,6 +37,7 @@ use tracing::Level;
 pub const HEALTHCHECK_SERVICE_NAME: &str = "health";
 const MAX_BYTES_LIVENESS_OUTPUT: usize = 1024;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 enum Probe {
     Http(Uri),
