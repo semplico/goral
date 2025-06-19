@@ -1,12 +1,13 @@
 pub mod configuration;
 use crate::google::datavalue::{Datarow, Datavalue};
+use crate::google::StorageError;
 use crate::http::{run_server, to_body, Body};
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{MessengerApi, Notification, Sender};
 use crate::rules::RULES_LOG_NAME;
 use crate::services::kv::configuration::Kv;
 use crate::services::{messenger_queue, rules_notifications, Data, Service};
-use crate::storage::{AppendableLog, StorageError};
+use crate::storage::AppendableLog;
 use crate::{capture_datetime, Shared};
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime, Utc};
@@ -115,13 +116,11 @@ struct Request {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Response {
-    sheet_urls: Vec<String>,
-}
+struct Response {}
 
 struct AppendRequest {
     datarows: Vec<Datarow>,
-    reply_to: oneshot::Sender<Result<Vec<String>, StorageError>>,
+    reply_to: oneshot::Sender<Result<(), StorageError>>,
 }
 
 struct ReadyHandle(Arc<AtomicBool>);
@@ -218,7 +217,7 @@ impl KvService {
                     panic!("assert: kv service data messages queue shouldn't be closed before shutdown signal");
                 }
 
-                let sheet_urls = match rx.await {
+                match rx.await {
                     Err(e) => {
                         let msg = format!("kv service failed to get a result of append `{e}`");
                         tracing::error!("{}", msg);
@@ -242,11 +241,11 @@ impl KvService {
                             .body(to_body(text.into_bytes()))
                             .expect("assert: should be able to build response body from string"));
                     }
-                    Ok(Ok(sheet_urls)) => sheet_urls,
+                    Ok(Ok(())) => {}
                 };
 
-                let json = serde_json::to_vec(&Response { sheet_urls })
-                    .expect("assert: should be able to serialize vector of sheet urls");
+                let json = serde_json::to_vec(&Response {})
+                    .expect("assert: should be able to serialize empty json");
                 let response = HyperResponse::builder()
                     .status(StatusCode::OK)
                     .header(header::CONTENT_TYPE, "application/json")
@@ -389,9 +388,8 @@ impl Service for KvService {
                                 let AppendRequest{datarows, reply_to} = append_request;
                                 let mut data = Data::Many(datarows);
                                 self.preprocess_datarows(&mut log, &mut data);
-                                self.send_for_rule_processing(&data, &mut rules_input).await;
-                                let Data::Many(datarows) = data else {panic!("assert: packing/unpacking of KV data")};
-                                let res = log.append_no_retry(datarows).await;
+                                self.send_for_rule_processing(data, &mut rules_input).await;
+                                let res = log.append_no_retry().await;
                                 if reply_to.send(res).is_err() {
                                     tracing::warn!("client of the kv server dropped connection");
                                 }
@@ -409,9 +407,8 @@ impl Service for KvService {
                     let AppendRequest{datarows, reply_to} = append_request;
                     let mut data = Data::Many(datarows);
                     self.preprocess_datarows(&mut log, &mut data);
-                    self.send_for_rule_processing(&data, &mut rules_input).await;
-                    let Data::Many(datarows) = data else {panic!("assert: packing/unpacking of KV data")};
-                    let res = log.append_no_retry(datarows).await;
+                    self.send_for_rule_processing(data, &mut rules_input).await;
+                    let res = log.append_no_retry().await;
                     if reply_to.send(res).is_err() {
                         tracing::warn!("client of the kv server dropped connection");
                     }
@@ -430,10 +427,9 @@ mod tests {
     use crate::configuration::tests::build_config;
     use crate::google::spreadsheet::tests::TestState;
     use crate::google::spreadsheet::SpreadsheetAPI;
-    use crate::google::Metadata;
+    use crate::google::Storage;
     use crate::http::{HttpClient, Uri};
     use crate::notifications::Sender;
-    use crate::storage::Storage;
     use crate::tests::TEST_HOST_ID;
     use crate::Shared;
     use serde_json::json;
@@ -496,7 +492,7 @@ mod tests {
             }
         ]});
         tokio::time::sleep(Duration::from_secs(1)).await;
-        let (body, response) = client
+        let (_body, response) = client
             .post_json(url.clone(), vec![], &payload)
             .await
             .unwrap();
@@ -504,13 +500,6 @@ mod tests {
             response.status(),
             200,
             "correct KV request should be accepted"
-        );
-        let kv_response: Response = serde_json::from_slice(&body).unwrap();
-
-        assert_eq!(
-            kv_response.sheet_urls.len(),
-            2,
-            "2 sheets should be created: for `js_error` and `browser_report`"
         );
 
         let invalid_payload = json!({"rows": [
@@ -539,26 +528,25 @@ mod tests {
         service.await.unwrap();
 
         let all_sheets = storage
-            .google()
-            .sheets_filtered_by_metadata("spreadsheet1", &Metadata::new(vec![]))
+            .tables_for_service("spreadsheet1", KV_SERVICE_NAME)
             .await
             .unwrap();
+
         assert_eq!(
             all_sheets.len(),
             2,
             "2 sheets should be created: for `js_error` and `browser_report`"
         );
         assert!(
-            all_sheets[0].title().contains("js_error")
-                || all_sheets[1].title().contains("js_error")
+            all_sheets[0].name().contains("js_error") || all_sheets[1].name().contains("js_error")
         );
         assert!(
-            all_sheets[0].title().contains("browser_report")
-                || all_sheets[1].title().contains("browser_report")
+            all_sheets[0].name().contains("browser_report")
+                || all_sheets[1].name().contains("browser_report")
         );
         assert_eq!(
-            all_sheets[0].row_count(),
-            Some(1 + 1), // one row for data and one row for headers
+            all_sheets[0].rows_count(),
+            1 + 1, // one row for data and one row for headers
             "sheet contains all data from the request"
         );
     }

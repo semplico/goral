@@ -396,7 +396,7 @@ impl Service for HealthcheckService {
                 "assert: healthcheck result contains single datarow both for error and for ok"
             ),
         };
-        log.preprocess_datarow(&mut datarow, self.name());
+        log.plan_to_append(&mut datarow);
         if self.liveness_previous_state[id].is_none()
             || self.liveness_previous_state[id] != Some(is_alive)
         {

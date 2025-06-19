@@ -50,7 +50,7 @@ Such a configuration runs a server process in the Goral daemon listening at the 
 
 
 
-Goral KV service responds with an array of urls of sheets for each datarow respectively.
+Goral KV service responds 200 OK for a successful append.
 Goral accepts every batch and creates corresponding sheets in the configured spreadsheet for "Orders" and "Marketing Campaigns". At the end of the month you have all the billing data neatly collected.
 For even more interactive setup you can share a spreadsheet access with your client (for him/her see all the process online) and configure a messenger for alerts and notifications (see the section [Rules](./rules.md)) by adding your client to the chat.
 Unlike other Goral services, this KV api is synchronous - if Goral responds successfully then sheets are created already and data is saved.

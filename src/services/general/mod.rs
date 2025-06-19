@@ -181,9 +181,9 @@ mod tests {
     use crate::configuration::tests::build_config;
     use crate::google::spreadsheet::tests::TestState;
     use crate::google::spreadsheet::SpreadsheetAPI;
+    use crate::google::Storage;
     use crate::messenger::tests::TestMessenger;
     use crate::notifications::Sender;
-    use crate::storage::Storage;
     use crate::tests::TEST_HOST_ID;
     use crate::Shared;
     use std::sync::{
