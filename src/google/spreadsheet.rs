@@ -1,15 +1,14 @@
 use crate::configuration::GOOGLE_SHEET_BASE;
-use crate::google::sheet::{CleanupSheet, Rows, Sheet, SheetId, UpdateSheet, VirtualSheet};
-use crate::google::Metadata;
-use crate::storage::StorageError;
-
 #[cfg(not(test))]
+use crate::google::sheet::{METADATA_HOST_ID_KEY, METADATA_SERVICE_KEY};
+use crate::google::{StorageError, Table, TableId};
 use crate::http::HyperConnector;
 use crate::notifications::Sender;
 use chrono::Utc;
 use google_sheets4::api::{
-    BatchUpdateSpreadsheetRequest, BatchUpdateSpreadsheetResponse, Spreadsheet,
+    BatchUpdateSpreadsheetRequest, BatchUpdateSpreadsheetResponse, Request, Spreadsheet,
 };
+use google_sheets4::yup_oauth2;
 #[cfg(not(test))]
 use google_sheets4::{
     api::{
@@ -31,6 +30,26 @@ type SheetResponse<T = BatchUpdateSpreadsheetResponse> = SheetsResult<(
     hyper::Response<http_body_util::combinators::BoxBody<hyper::body::Bytes, hyper::Error>>,
     T,
 )>;
+
+pub async fn get_google_auth(
+    service_account_credentials_path: &str,
+) -> (
+    String,
+    yup_oauth2::authenticator::Authenticator<HyperConnector>,
+) {
+    let key = yup_oauth2::read_service_account_key(service_account_credentials_path)
+        .await
+        .expect("failed to read service account credentials file");
+    (
+        key.project_id
+            .clone()
+            .expect("assert: service account has project id"),
+        yup_oauth2::ServiceAccountAuthenticator::builder(key)
+            .build()
+            .await
+            .expect("failed to create Google API authenticator"),
+    )
+}
 
 async fn handle_error<T>(
     spreadsheet: &SpreadsheetAPI,
@@ -138,19 +157,27 @@ impl SpreadsheetAPI {
     }
 
     #[cfg(not(test))]
-    async fn get(&self, spreadsheet_id: &str, metadata: &Metadata) -> SheetResponse<Spreadsheet> {
-        let filters: Vec<_> = metadata
-            .iter()
-            .map(|(k, v)| DataFilter {
-                developer_metadata_lookup: Some(DeveloperMetadataLookup {
-                    visibility: Some("PROJECT".to_string()),
-                    metadata_key: Some(k.to_string()),
-                    metadata_value: Some(v.to_string()),
-                    ..Default::default()
-                }),
+    async fn get(
+        &self,
+        spreadsheet_id: &str,
+        host: &str,
+        service: &str,
+    ) -> SheetResponse<Spreadsheet> {
+        let filters: Vec<_> = [
+            (METADATA_HOST_ID_KEY, host),
+            (METADATA_SERVICE_KEY, service),
+        ]
+        .into_iter()
+        .map(|(k, v)| DataFilter {
+            developer_metadata_lookup: Some(DeveloperMetadataLookup {
+                visibility: Some("PROJECT".to_string()),
+                metadata_key: Some(k.to_string()),
+                metadata_value: Some(v.to_string()),
                 ..Default::default()
-            })
-            .collect();
+            }),
+            ..Default::default()
+        })
+        .collect();
         let req = GetSpreadsheetByDataFilterRequest {
             data_filters: Some(filters),
             ..Default::default()
@@ -168,7 +195,7 @@ impl SpreadsheetAPI {
     pub async fn get_sheet_data(
         &self,
         spreadsheet_id: &str,
-        sheet_id: SheetId,
+        sheet_id: TableId,
     ) -> Result<Vec<Vec<Value>>, StorageError> {
         let req = BatchGetValuesByDataFilterRequest {
             data_filters: Some(vec![DataFilter {
@@ -209,14 +236,19 @@ impl SpreadsheetAPI {
     pub async fn get_sheet_data(
         &self,
         spreadsheet_id: &str,
-        sheet_id: SheetId,
+        sheet_id: TableId,
     ) -> Result<Vec<Vec<Value>>, StorageError> {
         let mut state = self.state.lock().await;
         state.get_sheet_data(spreadsheet_id, sheet_id).await
     }
 
     #[cfg(test)]
-    async fn get(&self, spreadsheet_id: &str, _metadata: &Metadata) -> SheetResponse<Spreadsheet> {
+    async fn get(
+        &self,
+        spreadsheet_id: &str,
+        _host: &str,
+        _service: &str,
+    ) -> SheetResponse<Spreadsheet> {
         let mut state = self.state.lock().await;
         state.get(spreadsheet_id).await
     }
@@ -244,11 +276,17 @@ impl SpreadsheetAPI {
         state.update(req, spreadsheet_id).await
     }
 
-    pub fn sheet_row_url(&self, spreadsheet_id: &str, sheet_id: SheetId, row: u32) -> String {
+    #[cfg(test)]
+    pub async fn delete_sheet(&self, table_id: TableId) {
+        let mut state = self.state.lock().await;
+        state.delete_sheet(&table_id);
+    }
+
+    pub fn sheet_row_url(&self, spreadsheet_id: &str, sheet_id: TableId, row: u32) -> String {
         format!("{GOOGLE_SHEET_BASE}{spreadsheet_id}#gid={sheet_id}&range={row}:{row}")
     }
 
-    pub fn sheet_url(&self, spreadsheet_id: &str, sheet_id: SheetId) -> String {
+    pub fn sheet_url(&self, spreadsheet_id: &str, sheet_id: TableId) -> String {
         format!("{GOOGLE_SHEET_BASE}{spreadsheet_id}#gid={sheet_id}")
     }
 
@@ -256,12 +294,13 @@ impl SpreadsheetAPI {
         format!("{GOOGLE_SHEET_BASE}{spreadsheet_id}#gid=")
     }
 
-    pub async fn sheets_filtered_by_metadata(
+    pub async fn sheets_filtered(
         &self,
         spreadsheet_id: &str,
-        metadata: &Metadata,
-    ) -> Result<Vec<Sheet>, StorageError> {
-        let result = self.get(spreadsheet_id, metadata).await;
+        host: &str,
+        service: &str,
+    ) -> Result<Vec<Table>, StorageError> {
+        let result = self.get(spreadsheet_id, host, service).await;
 
         tracing::trace!("{:?}", result);
         let response = handle_error(self, result).await.map_err(|e| {
@@ -269,53 +308,23 @@ impl SpreadsheetAPI {
             e
         })?;
 
-        let sheets: Vec<Sheet> = response
+        let tables: Vec<Table> = response
             .sheets
             .expect("assert: spreadsheet should contain sheets property even if no sheets")
             .into_iter()
-            .map(|s| s.into())
-            .filter(|s: &Sheet| s.metadata.contains(metadata))
+            .filter_map(|t| t.try_into().ok())
+            .filter(|t: &Table| t.host() == host && t.service() == service)
             .collect();
 
-        Ok(sheets)
+        Ok(tables)
     }
 
     async fn _crud_sheets(
         &self,
         spreadsheet_id: &str,
-        truncates_before: Vec<CleanupSheet>,
-        updates: Vec<UpdateSheet>,
-        sheets: Vec<VirtualSheet>,
-        data: Vec<Rows>,
-        truncates_after: Vec<CleanupSheet>,
+        requests: Vec<Request>,
     ) -> Result<BatchUpdateSpreadsheetResponse, StorageError> {
         // capacity for actual usage
-        let mut requests = Vec::with_capacity(
-            truncates_before.len()
-                + sheets.len() * 10
-                + data.len() * 2
-                + updates.len()
-                + truncates_after.len(),
-        );
-        for truncate in truncates_before.into_iter() {
-            requests.push(truncate.into_api_request());
-        }
-
-        for update in updates.into_iter() {
-            requests.append(&mut update.into_api_requests());
-        }
-
-        for s in sheets.into_iter() {
-            requests.append(&mut s.into_api_requests())
-        }
-
-        for rows in data.into_iter() {
-            requests.append(&mut rows.into_api_requests())
-        }
-
-        for truncate in truncates_after.into_iter() {
-            requests.push(truncate.into_api_request());
-        }
 
         tracing::trace!("requests:\n{:?}", requests);
 
@@ -335,25 +344,14 @@ impl SpreadsheetAPI {
     pub async fn crud_sheets(
         &self,
         spreadsheet_id: &str,
-        truncates_before: Vec<CleanupSheet>,
-        updates: Vec<UpdateSheet>,
-        sheets: Vec<VirtualSheet>,
-        data: Vec<Rows>,
-        truncates_after: Vec<CleanupSheet>,
+        requests: Vec<Request>,
     ) -> Result<(), StorageError> {
-        self._crud_sheets(
-            spreadsheet_id,
-            truncates_before,
-            updates,
-            sheets,
-            data,
-            truncates_after,
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!("{:?}", e);
-            e
-        })?;
+        self._crud_sheets(spreadsheet_id, requests)
+            .await
+            .map_err(|e| {
+                tracing::error!("{:?}", e);
+                e
+            })?;
         Ok(())
     }
 }
@@ -376,9 +374,9 @@ pub mod tests {
     use tokio::time::sleep;
 
     pub struct TestState {
-        sheets: HashMap<SheetId, GoogleSheet>,
+        sheets: HashMap<TableId, GoogleSheet>,
         sheet_titles: HashSet<String>,
-        metadata: HashMap<i32, (SheetId, usize)>,
+        metadata: HashMap<i32, (TableId, usize)>,
         respond_with_error: Option<SheetsError>,
         basic_response_duration_millis: u64,
         basic_response_duration_millis_for_second_request: u64,
@@ -419,7 +417,7 @@ pub mod tests {
         ) -> Self {
             let mut sheet_titles = HashSet::with_capacity(sheets.len());
             let mut metadata = HashMap::with_capacity(sheets.len());
-            let sheets: HashMap<SheetId, GoogleSheet> = sheets
+            let sheets: HashMap<TableId, GoogleSheet> = sheets
                 .into_iter()
                 .map(|s| {
                     sheet_titles.insert(
@@ -500,10 +498,24 @@ pub mod tests {
             ))
         }
 
+        pub fn delete_sheet(&mut self, sheet_id: &TableId) -> bool {
+            if let Some(sheet) = self.sheets.remove(sheet_id) {
+                let properties = sheet
+                    .properties
+                    .expect("assert: sheet properties cannot be null");
+                let title = properties
+                    .title
+                    .expect("assert: sheet title cannot be null");
+                self.sheet_titles.remove(&title)
+            } else {
+                false
+            }
+        }
+
         pub async fn get_sheet_data(
             &mut self,
             _spreadsheet_id: &str,
-            _sheet_id: SheetId,
+            _sheet_id: TableId,
         ) -> Result<Vec<Vec<Value>>, StorageError> {
             Ok(vec![])
         }
@@ -558,7 +570,7 @@ pub mod tests {
                             .grid_properties
                             .as_mut()
                             .expect("assert: goral creates grid sheets")
-                            .row_count = Some(current_row_count - 1);
+                            .row_count = Some(current_row_count);
                         self.sheets
                             .insert(sheet_id, mock_sheet_with_properties(properties));
                     }
@@ -603,10 +615,30 @@ pub mod tests {
                                         sheet_id: Some(sheet_id),
                                         ..
                                     }),
+                                rows: Some(rows_to_add),
                                 ..
                             }),
                         ..
                     } => {
+                        // we don't update row counters
+                        // as this request follows AddSheet which
+                        // already increases
+                        let sheet = self
+                            .sheets
+                            .get(&sheet_id)
+                            .expect("assert: the sheet doesn't exist");
+                        let row_count: usize = sheet
+                            .properties
+                            .as_ref()
+                            .expect("assert: goral creates sheets with properties")
+                            .grid_properties
+                            .as_ref()
+                            .expect("assert: goral creates grid sheets with grid_properties")
+                            .row_count
+                            .expect("assert: grid properties has row count")
+                            .try_into()
+                            .expect("assert: row count is non-negative");
+                        assert_eq!(rows_to_add.len(), row_count);
                         if !self.sheets.contains_key(&sheet_id) {
                             return Err(Self::bad_response(format!(
                                 "sheet with id {sheet_id} not found to update cells!"
@@ -775,7 +807,7 @@ pub mod tests {
                             }),
                         ..
                     } => {
-                        if self.sheets.remove(&sheet_id).is_none() {
+                        if !self.delete_sheet(&sheet_id) {
                             return Err(Self::bad_response(format!(
                                 "sheet with id {sheet_id} not found to delete!"
                             )));

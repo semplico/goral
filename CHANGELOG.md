@@ -1,3 +1,7 @@
+* 0.1.13
+    * sheets storage refactoring
+    * bugfix of the truncation algorithm
+
 * 0.1.12
     * spreadsheet links with a specific row for healthchecks and rules triggers
     * upgrade all dependencies

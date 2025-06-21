@@ -6,10 +6,11 @@ pub mod metrics;
 pub mod system;
 
 use crate::google::datavalue::{Datarow, Datavalue};
+use crate::google::Storage;
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{Notification, Sender};
 use crate::rules::{Action, Rule, RuleCondition, RuleOutput, Triggered};
-use crate::storage::{AppendableLog, Storage};
+use crate::storage::AppendableLog;
 use crate::{jitter_duration, BoxedMessenger, Shared};
 use async_trait::async_trait;
 use futures::future::try_join_all;
@@ -173,7 +174,7 @@ async fn rules_notifications(
         let message = format!(
             "{}\n[spreadsheet]({}) may be created a bit later",
             triggered.message,
-            storage.sheet_row_url(&spreadsheet_id, triggered.sheet_id, triggered.row)
+            storage.table_row_url(&spreadsheet_id, triggered.sheet_id, triggered.row)
         );
         messenger.send(Notification::new(message, level)).await;
     }
@@ -331,29 +332,25 @@ pub trait Service: Send + Sync {
         vec![]
     }
 
-    fn preprocess_datarows(&self, log: &mut AppendableLog, data: &mut Data) {
+    fn plan_to_append(&self, log: &mut AppendableLog, data: &mut Data) {
         match data {
             Data::Empty | Data::Message(_) => {}
             Data::Single(ref mut datarow) => {
-                log.preprocess_datarow(datarow, self.name());
+                log.plan_to_append(datarow);
             }
             Data::Many(ref mut datarows) => {
                 datarows.iter_mut().for_each(|datarow| {
-                    log.preprocess_datarow(datarow, self.name());
+                    log.plan_to_append(datarow);
                 });
             }
         }
     }
 
-    async fn send_for_rule_processing(
-        &self,
-        data: &Data,
-        input_tx: &mut mpsc::Sender<RulePayload>,
-    ) {
+    async fn send_for_rule_processing(&self, data: Data, input_tx: &mut mpsc::Sender<RulePayload>) {
         if self.shared().messenger.is_none() {
             return;
         }
-        match input_tx.try_send(RulePayload::Data(data.clone())) {
+        match input_tx.try_send(RulePayload::Data(data)) {
             Err(TrySendError::Full(_)) => {
                 let msg = format!(
                     "rules input messages queue is full for service {}",
@@ -445,7 +442,10 @@ pub trait Service: Send + Sync {
         //  channel to collect rule output triggers
         let (output_tx, output_rx) = mpsc::channel(2 * self.channel_capacity());
         let example_rules = self.get_example_rules();
-        let _ = log.append(example_rules).await;
+        example_rules
+            .into_iter()
+            .for_each(|mut r| log.plan_to_append(&mut r));
+        let _ = log.append().await;
         let rules = log
             .get_rules()
             .await
@@ -518,7 +518,6 @@ pub trait Service: Send + Sync {
         tokio::pin!(tasks);
         let mut push_interval = tokio::time::interval(self.push_interval());
         let mut rules_update_interval = tokio::time::interval(self.rules_update_interval());
-        let mut accumulated_data = vec![];
         self.welcome_hook(&log).await;
         loop {
             tokio::select! {
@@ -538,17 +537,10 @@ pub trait Service: Send + Sync {
                             // drain remaining messages
                             while let Some(task_result) = data_receiver.recv().await {
                                 let mut data = self.process_task_result_on_shutdown(task_result, &mut log).await;
-                                self.preprocess_datarows(&mut log, &mut data);
-                                self.send_for_rule_processing(&data, &mut rules_input).await;
-                                match data {
-                                    Data::Empty | Data::Message(_) => {},
-                                    Data::Single(datarow) => {accumulated_data.push(datarow);}
-                                    Data::Many(mut datarows) => {accumulated_data.append(&mut datarows);}
-                                }
+                                self.plan_to_append(&mut log, &mut data);
+                                self.send_for_rule_processing(data, &mut rules_input).await;
                             }
-                            if !accumulated_data.is_empty() {
-                                let _ = log.append(accumulated_data).await;
-                            }
+                            let _ = log.append().await;
                         } => {
                             tracing::info!("{} service has successfully shutdowned", self.name());
                         }
@@ -556,19 +548,15 @@ pub trait Service: Send + Sync {
                     return;
                 },
                 _ = push_interval.tick() => {
-                    let rows_count = accumulated_data.len();
-                    if rows_count > 0 {
-                        tracing::info!(
-                            "appending {} rows for service {}",
-                            rows_count,
-                            self.name()
-                        );
-                    } else {
-                        continue;
-                    }
                     let example_rules = self.get_example_rules();
-                    accumulated_data.extend(example_rules);
-                    if let Err(e) = log.append(accumulated_data).await {
+                    example_rules.into_iter().for_each(|mut r| log.plan_to_append(&mut r));
+                    let rows_count = log.new_rows();
+                    tracing::info!(
+                        "appending {} rows for service {}",
+                        rows_count,
+                        self.name()
+                    );
+                    if let Err(e) = log.append().await {
                         let msg = format!("`{e}` for service `{}`, failed to append {rows_count} rows", self.name());
                         tracing::error!("{}", msg);
                         if let Some(messenger_config) = &self.messenger_config() {
@@ -583,21 +571,14 @@ pub trait Service: Send + Sync {
                             self.name()
                         );
                     }
-
-                    accumulated_data = vec![];
                 },
                 _ = rules_update_interval.tick() => {
                     self.send_updated_rules(&log, &mut rules_input).await;
                 }
                 Some(task_result) = data_receiver.recv() => {
                     let mut data = self.process_task_result(task_result, &mut log).await;
-                    self.preprocess_datarows(&mut log, &mut data);
-                    self.send_for_rule_processing(&data, &mut rules_input).await;
-                    match data {
-                        Data::Empty | Data::Message(_) => {},
-                        Data::Single(datarow) => {accumulated_data.push(datarow);}
-                        Data::Many(mut datarows) => {accumulated_data.append(&mut datarows);}
-                    }
+                    self.plan_to_append(&mut log, &mut data);
+                    self.send_for_rule_processing(data, &mut rules_input).await;
                 }
                 res = &mut tasks => {
                     res.unwrap(); // propagate panics from spawned tasks
@@ -614,10 +595,9 @@ mod tests {
     use crate::google::datavalue::Datavalue;
     use crate::google::spreadsheet::tests::TestState;
     use crate::google::spreadsheet::SpreadsheetAPI;
-    use crate::google::Metadata;
+    use crate::google::Storage;
     use crate::notifications::Sender;
     use crate::services::general::GENERAL_SERVICE_NAME;
-    use crate::storage::Storage;
     use crate::tests::TEST_HOST_ID;
 
     use chrono::Utc;
@@ -768,8 +748,7 @@ mod tests {
         service.await.unwrap();
 
         let all_sheets = storage
-            .google()
-            .sheets_filtered_by_metadata("spreadsheet1", &Metadata::new(vec![]))
+            .tables_for_service("spreadsheet1", GENERAL_SERVICE_NAME)
             .await
             .unwrap();
         assert_eq!(
@@ -778,17 +757,17 @@ mod tests {
             "only 2 sheets (for `log_name1` and rules) should be created"
         );
         assert!(
-            all_sheets[0].title().contains("log_name1")
-                || all_sheets[1].title().contains("log_name1")
+            all_sheets[0].name().contains("log_name1")
+                || all_sheets[1].name().contains("log_name1")
         );
-        assert!(all_sheets[0].title().contains("rules") || all_sheets[1].title().contains("rules"));
-        let row_count = if all_sheets[0].title().contains("log_name1") {
-            all_sheets[0].row_count()
+        assert!(all_sheets[0].name().contains("rules") || all_sheets[1].name().contains("rules"));
+        let row_count = if all_sheets[0].name().contains("log_name1") {
+            all_sheets[0].rows_count()
         } else {
-            all_sheets[1].row_count()
+            all_sheets[1].rows_count()
         };
         assert_eq!(
-            usize::try_from(row_count.unwrap()).unwrap() - 1,
+            usize::try_from(row_count).unwrap() - 1,
             data_counter.load(Ordering::SeqCst), // one row for header row
             "`log_name1` contains all data generated by the service"
         );
