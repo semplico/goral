@@ -59,7 +59,10 @@ impl AppendableLog {
         // it means it was deleted between updates
         // we need to mark it for re-creation
         for (id, previous_table) in self.tables.iter_mut() {
-            if tables.contains_key(id) || previous_table.is_deleted() {
+            if tables.contains_key(id)
+                || previous_table.to_be_deleted()
+                || previous_table.to_be_created()
+            {
                 continue;
             }
             previous_table.plan_to_recreate();
@@ -157,10 +160,10 @@ impl AppendableLog {
         let mut ids_to_delete = vec![];
         for t in self.tables.values_mut() {
             let id = *t.id();
-            if t.is_cleaned() {
+            if t.to_be_cleaned() {
                 self.truncate_warning_is_sent = false;
             }
-            if t.is_deleted() {
+            if t.to_be_deleted() {
                 ids_to_delete.push(id);
             }
             t.post_execution();
@@ -302,9 +305,7 @@ impl AppendableLog {
             self.tables.insert(*id, table);
             row
         };
-        if let Some(row) = row {
-            datarow.set_row(row);
-        }
+        datarow.set_row(row);
     }
 
     pub fn storage(&self) -> Arc<Storage> {

@@ -1,4 +1,4 @@
-use crate::google::sheet::{str_to_id, Header};
+use crate::google::sheet::str_to_id;
 use crate::google::{TableId, DEFAULT_FONT, DEFAULT_FONT_TEXT};
 use crate::rules::RuleApplicant;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
@@ -105,13 +105,13 @@ impl Datarow {
         keys
     }
 
-    pub fn headers(&self) -> Vec<Header> {
-        let mut headers = Vec::with_capacity(self.data.len() + 1);
-        headers.push(Header::new(DATETIME_COLUMN_NAME.to_string(), None));
+    pub fn columns(&self) -> Vec<String> {
+        let mut columns = Vec::with_capacity(self.data.len() + 1);
+        columns.push(DATETIME_COLUMN_NAME.to_string());
         for (k, _) in self.data.iter() {
-            headers.push(Header::new(k.to_string(), None));
+            columns.push(k.to_string());
         }
-        headers
+        columns
     }
 
     pub fn sort_by_keys(&mut self, keys: &[String]) {

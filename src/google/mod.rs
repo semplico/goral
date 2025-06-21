@@ -16,8 +16,9 @@ use google_sheets4::api::{
 use google_sheets4::FieldMask;
 use serde_json::Value;
 use sheet::{
-    generate_metadata_id, KEYS_DELIMITER, METADATA_CREATED_AT, METADATA_HOST_ID_KEY, METADATA_KEYS,
-    METADATA_LOG_NAME, METADATA_ROW_COUNT, METADATA_SERVICE_KEY, METADATA_UPDATED_AT,
+    generate_metadata_id, Header, KEYS_DELIMITER, METADATA_CREATED_AT, METADATA_HOST_ID_KEY,
+    METADATA_KEYS, METADATA_LOG_NAME, METADATA_ROW_COUNT, METADATA_SERVICE_KEY,
+    METADATA_UPDATED_AT,
 };
 use sheet::{prepare_sheet_title, Dropdown, SheetType, TabColorRGB};
 pub use spreadsheet::{get_google_auth, SpreadsheetAPI, GOOGLE_SPREADSHEET_MAXIMUM_CELLS};
@@ -83,12 +84,10 @@ impl Table {
         datarow: &datavalue::Datarow,
     ) -> Self {
         let timestamp = Utc::now();
-        let header_values: Vec<CellData> =
-            datarow.headers().into_iter().map(|h| h.into()).collect();
-        let columns: Vec<String> = datarow
-            .headers()
+        let columns = datarow.columns();
+        let header_values: Vec<CellData> = columns
             .iter()
-            .map(|h| h.title().to_string())
+            .map(|c| Header::new(c.clone()).into())
             .collect();
         let sheet_id = datarow.sheet_id();
         let title =
@@ -117,6 +116,18 @@ impl Table {
     }
 
     pub fn plan_to_recreate(&mut self) {
+        let header_values: Vec<CellData> = self
+            .columns
+            .iter()
+            .map(|c| Header::new(c.clone()).into())
+            .collect();
+        self.rows_to_add.insert(
+            0,
+            RowData {
+                values: Some(header_values),
+            },
+        );
+        self.rows_to_add_count += 1;
         self.to_create = true;
         self.used_rows = 0;
         self.used_columns = 0;
@@ -132,20 +143,19 @@ impl Table {
     }
 
     // returns a potential row to be inserted
-    pub fn plan_to_append(&mut self, mut datarow: datavalue::Datarow) -> Option<u32> {
-        if datarow.log_name() == RULES_LOG_NAME && !self.to_create {
-            // we don't append for existing rules table
-            return None;
-        }
-        datarow.sort_by_keys(self.columns());
+    pub fn plan_to_append(&mut self, mut datarow: datavalue::Datarow) -> u32 {
+        datarow.sort_by_keys(&self.columns);
         self.rows_to_add.push(datarow.into());
         self.rows_to_add_count += 1;
-        Some(self.rows_count + self.rows_to_add_count)
+        self.rows_count + self.rows_to_add_count
     }
 
+    // after successful execution
     pub fn post_execution(&mut self) {
         self.rows_count += self.rows_to_add_count;
-        self.rows_to_add_count = 0;
+        self.rows_to_add_count = 0; // the new rows have been appended
+        self.to_create = false; // the table has been created
+        self.to_cleanup = None; // the table has been cleaned up
         assert!(self.rows_to_add.is_empty());
     }
 
@@ -157,11 +167,15 @@ impl Table {
         &self.id
     }
 
-    pub fn is_cleaned(&self) -> bool {
+    pub fn to_be_created(&self) -> bool {
+        self.to_create
+    }
+
+    pub fn to_be_cleaned(&self) -> bool {
         self.to_cleanup.is_some()
     }
 
-    pub fn is_deleted(&self) -> bool {
+    pub fn to_be_deleted(&self) -> bool {
         self.to_cleanup == Some(Cleanup::Delete)
     }
 
@@ -223,6 +237,14 @@ impl Table {
     pub fn api_requests(&mut self) -> Vec<Request> {
         // take out accumulated rows
         let rows_to_add = std::mem::take(&mut self.rows_to_add);
+
+        if self.name == RULES_LOG_NAME && !self.to_create {
+            // we don't append for existing rules table
+            // but it is important to collect rules with `plan_to_append`
+            // in case the rules table is deleted to recreate it
+            return vec![];
+        }
+
         assert!(
             rows_to_add.len() == self.rows_to_add_count as usize,
             "assert: rows to add number and their counter should be equal for the table {}",
@@ -318,7 +340,7 @@ impl Table {
             requests.push(Request {
                 update_cells: Some(UpdateCellsRequest {
                     fields: Some(
-                        FieldMask::from_str("userEnteredValue,userEnteredFormat,note")
+                        FieldMask::from_str("userEnteredValue,userEnteredFormat")
                             .expect("assert: field mask can be constructed from static str"),
                     ),
                     range: Some(range),
@@ -395,7 +417,7 @@ impl Table {
                     ..Default::default()
                 })
             }
-        } else {
+        } else if self.name != RULES_LOG_NAME {
             // We update only for append case
             // For truncation we don't update to prevent bumping old sheets up
             let take = if self.rows_to_add_count > 0 {
@@ -465,7 +487,7 @@ impl Table {
             ..Default::default()
         });
 
-        if self.used_rows > self.rows_count {
+        if self.name != RULES_LOG_NAME && self.used_rows > self.rows_count {
             // Delete empty rows after
             requests.push(Request {
                 delete_dimension: Some(DeleteDimensionRequest {

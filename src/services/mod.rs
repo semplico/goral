@@ -548,14 +548,14 @@ pub trait Service: Send + Sync {
                     return;
                 },
                 _ = push_interval.tick() => {
+                    let example_rules = self.get_example_rules();
+                    example_rules.into_iter().for_each(|mut r| log.plan_to_append(&mut r));
                     let rows_count = log.new_rows();
                     tracing::info!(
                         "appending {} rows for service {}",
                         rows_count,
                         self.name()
                     );
-                    let example_rules = self.get_example_rules();
-                    example_rules.into_iter().for_each(|mut r| log.plan_to_append(&mut r));
                     if let Err(e) = log.append().await {
                         let msg = format!("`{e}` for service `{}`, failed to append {rows_count} rows", self.name());
                         tracing::error!("{}", msg);

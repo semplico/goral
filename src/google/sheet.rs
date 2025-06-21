@@ -57,12 +57,11 @@ impl fmt::Display for SheetType {
 #[derive(Debug, Default)]
 pub struct Header {
     title: String,
-    note: Option<String>,
 }
 
 impl Header {
-    pub fn new(title: String, note: Option<String>) -> Self {
-        Self { title, note }
+    pub fn new(title: String) -> Self {
+        Self { title }
     }
 
     pub fn title(&self) -> &str {
@@ -111,7 +110,6 @@ impl From<Header> for CellData {
                 }),
                 ..Default::default()
             }),
-            note: val.note,
             ..Default::default()
         }
     }
