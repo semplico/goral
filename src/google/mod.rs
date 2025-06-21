@@ -132,17 +132,25 @@ impl Table {
     }
 
     // returns a potential row to be inserted
-    pub fn plan_to_append(&mut self, mut datarow: datavalue::Datarow) -> u32 {
+    pub fn plan_to_append(&mut self, mut datarow: datavalue::Datarow) -> Option<u32> {
+        if datarow.log_name() == RULES_LOG_NAME && !self.to_create {
+            // we don't append for existing rules table
+            return None;
+        }
         datarow.sort_by_keys(self.columns());
         self.rows_to_add.push(datarow.into());
         self.rows_to_add_count += 1;
-        self.rows_count + self.rows_to_add_count
+        Some(self.rows_count + self.rows_to_add_count)
     }
 
     pub fn post_execution(&mut self) {
         self.rows_count += self.rows_to_add_count;
         self.rows_to_add_count = 0;
         assert!(self.rows_to_add.is_empty());
+    }
+
+    pub fn rows_to_add_count(&self) -> u32 {
+        self.rows_to_add_count
     }
 
     pub fn id(&self) -> &TableId {
@@ -215,7 +223,11 @@ impl Table {
     pub fn api_requests(&mut self) -> Vec<Request> {
         // take out accumulated rows
         let rows_to_add = std::mem::take(&mut self.rows_to_add);
-        assert!(rows_to_add.len() == self.rows_to_add_count as usize);
+        assert!(
+            rows_to_add.len() == self.rows_to_add_count as usize,
+            "assert: rows to add number and their counter should be equal for the table {}",
+            self.title
+        );
         if let Some(Cleanup::Delete) = self.to_cleanup {
             return vec![Request {
                 delete_sheet: Some(DeleteSheetRequest {
@@ -358,8 +370,7 @@ impl Table {
                 (METADATA_HOST_ID_KEY, self.host.clone()),
                 (METADATA_SERVICE_KEY, self.service.clone()),
                 (METADATA_LOG_NAME, self.name.clone()),
-                // TODO join only str?
-                (METADATA_KEYS, self.columns.clone().join(KEYS_DELIMITER)),
+                (METADATA_KEYS, self.columns.join(KEYS_DELIMITER)),
                 (METADATA_ROW_COUNT, total_rows_count.to_string()),
                 (METADATA_CREATED_AT, self.created_at.to_rfc3339()),
                 (METADATA_UPDATED_AT, self.updated_at.to_rfc3339()),
@@ -387,16 +398,19 @@ impl Table {
         } else {
             // We update only for append case
             // For truncation we don't update to prevent bumping old sheets up
-            if self.rows_to_add_count > 0 {
+            let take = if self.rows_to_add_count > 0 {
                 self.updated_at = Utc::now();
-            }
-            // TODO for truncation case - only rows update
+                2
+            } else {
+                1
+            };
+            // For truncation case - only rows count update
             let metadata = [
-                (METADATA_UPDATED_AT, self.updated_at.to_rfc3339()),
                 (METADATA_ROW_COUNT, total_rows_count.to_string()),
+                (METADATA_UPDATED_AT, self.updated_at.to_rfc3339()),
             ];
 
-            for (k, v) in metadata.into_iter() {
+            for (k, v) in metadata.into_iter().take(take) {
                 requests.push(Request {
                     update_developer_metadata: Some(UpdateDeveloperMetadataRequest {
                         developer_metadata: Some(DeveloperMetadata {

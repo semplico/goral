@@ -273,17 +273,21 @@ impl AppendableLog {
         self.storage.host_id()
     }
 
+    pub fn new_rows(&self) -> u32 {
+        self.tables.values().map(|t| t.rows_to_add_count()).sum()
+    }
+
     pub fn plan_to_append(&mut self, datarow: &mut Datarow) {
+        // datarow has been already appended
+        if datarow.row.is_some() {
+            return;
+        }
         let host_id = self.host_id();
         let table_id = datarow.calculate_sheet_id(host_id, &self.service);
         if self.rules_table_id.is_none() && datarow.log_name() == RULES_LOG_NAME {
             self.rules_table_id = Some(table_id);
         }
         let row = if let Some(table) = self.tables.get_mut(&table_id) {
-            if datarow.log_name() == RULES_LOG_NAME {
-                // we don't append for existing rules table
-                return;
-            }
             table.plan_to_append(datarow.clone())
         } else {
             // create table
@@ -298,7 +302,9 @@ impl AppendableLog {
             self.tables.insert(*id, table);
             row
         };
-        datarow.set_row(row);
+        if let Some(row) = row {
+            datarow.set_row(row);
+        }
     }
 
     pub fn storage(&self) -> Arc<Storage> {

@@ -257,7 +257,6 @@ pub async fn welcome(
     .await
     .expect("assert: should be able to collect basic system info");
     let version = env!("CARGO_PKG_VERSION");
-    // TODO add current_exe
     let msg = format!(
         "{APP_NAME} `v{version}` has started with [api usage page](https://console.cloud.google.com/apis/dashboard?project={project_id}&show=all) and [api quota page](https://console.cloud.google.com/iam-admin/quotas?project={project_id}) at `{sys}`", 
     );

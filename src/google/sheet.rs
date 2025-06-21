@@ -1,4 +1,4 @@
-use crate::google::DEFAULT_FONT;
+use crate::google::{TableId, DEFAULT_FONT};
 use chrono::{DateTime, Utc};
 use google_sheets4::api::{CellData, CellFormat, Color, ColorStyle, ExtendedValue, TextFormat};
 use std::collections::hash_map::DefaultHasher;
@@ -6,7 +6,6 @@ use std::fmt;
 use std::hash::Hasher;
 use std::time::Duration;
 
-pub type SheetId = i32;
 pub type TabColorRGB = (f32, f32, f32);
 
 pub(super) const METADATA_SERVICE_KEY: &str = "service";
@@ -18,7 +17,7 @@ pub(super) const METADATA_ROW_COUNT: &str = "rows";
 pub(super) const METADATA_KEYS: &str = "keys";
 pub(super) const KEYS_DELIMITER: &str = "~^~";
 
-pub(super) fn generate_metadata_id(key: &str, sheet_id: SheetId) -> i32 {
+pub(super) fn generate_metadata_id(key: &str, sheet_id: TableId) -> i32 {
     str_to_id(&format!("{}{}", sheet_id, key))
 }
 
@@ -153,7 +152,7 @@ pub(super) fn prepare_sheet_title(
     service: &str,
     log_name: &str,
     timestamp: &DateTime<Utc>,
-    sheet_id: &SheetId,
+    sheet_id: &TableId,
 ) -> String {
     // to prevent sheet titles conflicts we "randomize" a little bit sheet creation datetime
     let jitter = sheet_name_jitter!(sheet_id);

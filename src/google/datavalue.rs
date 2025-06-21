@@ -1,5 +1,5 @@
-use crate::google::sheet::{str_to_id, Header, SheetId};
-use crate::google::{DEFAULT_FONT, DEFAULT_FONT_TEXT};
+use crate::google::sheet::{str_to_id, Header};
+use crate::google::{TableId, DEFAULT_FONT, DEFAULT_FONT_TEXT};
 use crate::rules::RuleApplicant;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use google_sheets4::api::{
@@ -55,7 +55,7 @@ pub struct Datarow {
     log_name: String,
     timestamp: NaiveDateTime,
     pub data: Vec<(String, Datavalue)>,
-    sheet_id: Option<SheetId>,
+    sheet_id: Option<TableId>,
     pub row: Option<u32>,
 }
 
@@ -70,7 +70,7 @@ impl Datarow {
         }
     }
 
-    pub fn calculate_sheet_id(&mut self, host_id: &str, service_name: &str) -> SheetId {
+    pub fn calculate_sheet_id(&mut self, host_id: &str, service_name: &str) -> TableId {
         if let Some(sheet_id) = self.sheet_id {
             return sheet_id;
         }
@@ -81,7 +81,7 @@ impl Datarow {
         sheet_id
     }
 
-    pub fn sheet_id(&self) -> SheetId {
+    pub fn sheet_id(&self) -> TableId {
         self.sheet_id
             .expect("Datarow sheet_id should be calculated first")
     }

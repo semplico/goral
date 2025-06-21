@@ -332,7 +332,7 @@ pub trait Service: Send + Sync {
         vec![]
     }
 
-    fn preprocess_datarows(&self, log: &mut AppendableLog, data: &mut Data) {
+    fn plan_to_append(&self, log: &mut AppendableLog, data: &mut Data) {
         match data {
             Data::Empty | Data::Message(_) => {}
             Data::Single(ref mut datarow) => {
@@ -537,7 +537,7 @@ pub trait Service: Send + Sync {
                             // drain remaining messages
                             while let Some(task_result) = data_receiver.recv().await {
                                 let mut data = self.process_task_result_on_shutdown(task_result, &mut log).await;
-                                self.preprocess_datarows(&mut log, &mut data);
+                                self.plan_to_append(&mut log, &mut data);
                                 self.send_for_rule_processing(data, &mut rules_input).await;
                             }
                             let _ = log.append().await;
@@ -548,13 +548,12 @@ pub trait Service: Send + Sync {
                     return;
                 },
                 _ = push_interval.tick() => {
-                    // TODO rows count
-                    let rows_count = 0;
-                        tracing::info!(
-                            "appending {} rows for service {}",
-                            rows_count,
-                            self.name()
-                        );
+                    let rows_count = log.new_rows();
+                    tracing::info!(
+                        "appending {} rows for service {}",
+                        rows_count,
+                        self.name()
+                    );
                     let example_rules = self.get_example_rules();
                     example_rules.into_iter().for_each(|mut r| log.plan_to_append(&mut r));
                     if let Err(e) = log.append().await {
@@ -578,7 +577,7 @@ pub trait Service: Send + Sync {
                 }
                 Some(task_result) = data_receiver.recv() => {
                     let mut data = self.process_task_result(task_result, &mut log).await;
-                    self.preprocess_datarows(&mut log, &mut data);
+                    self.plan_to_append(&mut log, &mut data);
                     self.send_for_rule_processing(data, &mut rules_input).await;
                 }
                 res = &mut tasks => {

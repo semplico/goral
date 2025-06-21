@@ -1,5 +1,5 @@
 use crate::google::datavalue::{Datarow, Datavalue, NOT_AVAILABLE};
-use crate::google::sheet::{Dropdown, SheetId};
+use crate::google::{sheet::Dropdown, TableId};
 use crate::notifications::{Notification, Sender};
 use chrono::Utc;
 use serde_json::Value;
@@ -360,7 +360,7 @@ impl From<Rule> for Datarow {
 pub struct RuleApplicant {
     pub log_name: String,
     pub data: HashMap<String, Datavalue>,
-    pub sheet_id: SheetId,
+    pub sheet_id: TableId,
     pub row: u32,
 }
 
@@ -374,7 +374,7 @@ pub enum RuleOutput {
 pub struct Triggered {
     pub message: String,
     pub action: Action,
-    pub sheet_id: SheetId,
+    pub sheet_id: TableId,
     pub row: u32,
 }
 

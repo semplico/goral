@@ -387,7 +387,7 @@ impl Service for KvService {
                             while let Some(append_request) = data_receiver.recv().await {
                                 let AppendRequest{datarows, reply_to} = append_request;
                                 let mut data = Data::Many(datarows);
-                                self.preprocess_datarows(&mut log, &mut data);
+                                self.plan_to_append(&mut log, &mut data);
                                 self.send_for_rule_processing(data, &mut rules_input).await;
                                 let res = log.append_no_retry().await;
                                 if reply_to.send(res).is_err() {
@@ -406,7 +406,7 @@ impl Service for KvService {
                 Some(append_request) = data_receiver.recv() => {
                     let AppendRequest{datarows, reply_to} = append_request;
                     let mut data = Data::Many(datarows);
-                    self.preprocess_datarows(&mut log, &mut data);
+                    self.plan_to_append(&mut log, &mut data);
                     self.send_for_rule_processing(data, &mut rules_input).await;
                     let res = log.append_no_retry().await;
                     if reply_to.send(res).is_err() {
