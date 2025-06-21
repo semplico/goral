@@ -951,4 +951,168 @@ mod tests {
         } // a scope to drop senders
         messages.await.unwrap();
     }
+
+    #[tokio::test]
+    async fn table_recreation_flow() {
+        let (tx, _) = mpsc::channel(1);
+        let tx = Sender::new(tx, GENERAL_SERVICE_NAME);
+        let sheets_api = SpreadsheetAPI::new(
+            tx.clone(),
+            TestState::new(vec![mock_ordinary_google_sheet("some sheet")], None, None),
+        );
+        let storage = Arc::new(Storage::new(TEST_HOST_ID.to_string(), sheets_api));
+        let mut log = AppendableLog::new(
+            storage.clone(),
+            "spreadsheet1".to_string(),
+            GENERAL_SERVICE_NAME.to_string(),
+            Some(tx.clone()),
+            100.0,
+        );
+
+        let timestamp = NaiveDate::from_ymd_opt(2023, 10, 19)
+            .expect("test assert: static date")
+            .and_hms_opt(0, 0, 0)
+            .expect("test assert: static time");
+
+        let mut datarow = Datarow::new(
+            "log_name1".to_string(),
+            timestamp,
+            vec![
+                ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                ("key12".to_string(), Datavalue::Size(400_u64)),
+            ],
+        );
+        log.plan_to_append(&mut datarow);
+
+        log.append().await.unwrap();
+
+        let all_sheets = storage
+            .tables_for_service(&log.spreadsheet_id, GENERAL_SERVICE_NAME)
+            .await
+            .unwrap();
+
+        assert_eq!(all_sheets.len(), 1, "`log_name1` sheet has been created");
+        assert!(all_sheets[0].name().contains("log_name1"));
+        assert_eq!(all_sheets[0].rows_count(), 2);
+
+        storage.delete_table(datarow.sheet_id()).await;
+
+        let all_sheets = storage
+            .tables_for_service(&log.spreadsheet_id, GENERAL_SERVICE_NAME)
+            .await
+            .unwrap();
+
+        assert!(all_sheets.is_empty(), "`log_name1` sheet has been deleted");
+
+        let mut datarow = Datarow::new(
+            "log_name1".to_string(),
+            timestamp,
+            vec![
+                ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                ("key12".to_string(), Datavalue::Size(400_u64)),
+            ],
+        );
+        log.plan_to_append(&mut datarow);
+
+        log.append().await.unwrap();
+
+        let all_sheets = storage
+            .tables_for_service(&log.spreadsheet_id, GENERAL_SERVICE_NAME)
+            .await
+            .unwrap();
+
+        assert_eq!(all_sheets.len(), 1, "`log_name1` sheet has been created");
+        assert!(all_sheets[0].name().contains("log_name1"));
+
+        assert_eq!(all_sheets[0].rows_count(), 2);
+    }
+
+    #[tokio::test]
+    async fn rules_recreation_flow() {
+        let (tx, _) = mpsc::channel(1);
+        let tx = Sender::new(tx, GENERAL_SERVICE_NAME);
+        let sheets_api = SpreadsheetAPI::new(
+            tx.clone(),
+            TestState::new(vec![mock_ordinary_google_sheet("some sheet")], None, None),
+        );
+        let storage = Arc::new(Storage::new(TEST_HOST_ID.to_string(), sheets_api));
+        let mut log = AppendableLog::new(
+            storage.clone(),
+            "spreadsheet1".to_string(),
+            GENERAL_SERVICE_NAME.to_string(),
+            Some(tx.clone()),
+            100.0,
+        );
+
+        let timestamp = NaiveDate::from_ymd_opt(2023, 10, 19)
+            .expect("test assert: static date")
+            .and_hms_opt(0, 0, 0)
+            .expect("test assert: static time");
+
+        let mut datarow = Datarow::new(
+            RULES_LOG_NAME.to_string(),
+            timestamp,
+            vec![
+                ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                ("key12".to_string(), Datavalue::Size(400_u64)),
+            ],
+        );
+        log.plan_to_append(&mut datarow);
+
+        log.append().await.unwrap();
+
+        let all_sheets = storage
+            .tables_for_service(&log.spreadsheet_id, GENERAL_SERVICE_NAME)
+            .await
+            .unwrap();
+
+        assert_eq!(all_sheets.len(), 1, "rules sheet has been created");
+        assert!(all_sheets[0].name().contains(RULES_LOG_NAME));
+        assert_eq!(all_sheets[0].rows_count(), 2);
+
+        // second append - no duplicates
+        log.plan_to_append(&mut datarow);
+
+        log.append().await.unwrap();
+
+        let all_sheets = storage
+            .tables_for_service(&log.spreadsheet_id, GENERAL_SERVICE_NAME)
+            .await
+            .unwrap();
+
+        assert_eq!(all_sheets.len(), 1, "rules sheet has been created");
+        assert!(all_sheets[0].name().contains(RULES_LOG_NAME));
+        assert_eq!(all_sheets[0].rows_count(), 2);
+
+        storage.delete_table(datarow.sheet_id()).await;
+
+        let all_sheets = storage
+            .tables_for_service(&log.spreadsheet_id, GENERAL_SERVICE_NAME)
+            .await
+            .unwrap();
+
+        assert!(all_sheets.is_empty(), "`log_name1` sheet has been deleted");
+
+        let mut datarow = Datarow::new(
+            RULES_LOG_NAME.to_string(),
+            timestamp,
+            vec![
+                ("key11".to_string(), Datavalue::HeatmapPercent(3_f64)),
+                ("key12".to_string(), Datavalue::Size(400_u64)),
+            ],
+        );
+        log.plan_to_append(&mut datarow);
+
+        log.append().await.unwrap();
+
+        let all_sheets = storage
+            .tables_for_service(&log.spreadsheet_id, GENERAL_SERVICE_NAME)
+            .await
+            .unwrap();
+
+        assert_eq!(all_sheets.len(), 1, "rules sheet has been created");
+        assert!(all_sheets[0].name().contains(RULES_LOG_NAME));
+
+        assert_eq!(all_sheets[0].rows_count(), 2);
+    }
 }

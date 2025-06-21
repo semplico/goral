@@ -521,10 +521,7 @@ mod tests {
                 ("disk_free".to_string(), Datavalue::Size(400_u64)),
             ],
         );
-        assert_eq!(
-            datarow.headers()[0],
-            Header::new(DATETIME_COLUMN_NAME.to_string(), None)
-        );
+        assert_eq!(datarow.columns()[0], DATETIME_COLUMN_NAME.to_string());
     }
 
     #[test]

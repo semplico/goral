@@ -696,6 +696,11 @@ impl Storage {
 
         Ok(tables)
     }
+
+    #[cfg(test)]
+    pub async fn delete_table(&self, table_id: TableId) {
+        self.google.delete_sheet(table_id).await;
+    }
 }
 
 #[derive(Debug)]

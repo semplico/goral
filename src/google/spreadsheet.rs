@@ -276,6 +276,12 @@ impl SpreadsheetAPI {
         state.update(req, spreadsheet_id).await
     }
 
+    #[cfg(test)]
+    pub async fn delete_sheet(&self, table_id: TableId) {
+        let mut state = self.state.lock().await;
+        state.delete_sheet(&table_id);
+    }
+
     pub fn sheet_row_url(&self, spreadsheet_id: &str, sheet_id: TableId, row: u32) -> String {
         format!("{GOOGLE_SHEET_BASE}{spreadsheet_id}#gid={sheet_id}&range={row}:{row}")
     }
@@ -490,6 +496,20 @@ pub mod tests {
                     spreadsheet_url: None,
                 },
             ))
+        }
+
+        pub fn delete_sheet(&mut self, sheet_id: &TableId) -> bool {
+            if let Some(sheet) = self.sheets.remove(sheet_id) {
+                let properties = sheet
+                    .properties
+                    .expect("assert: sheet properties cannot be null");
+                let title = properties
+                    .title
+                    .expect("assert: sheet title cannot be null");
+                self.sheet_titles.remove(&title)
+            } else {
+                false
+            }
         }
 
         pub async fn get_sheet_data(
@@ -787,7 +807,7 @@ pub mod tests {
                             }),
                         ..
                     } => {
-                        if self.sheets.remove(&sheet_id).is_none() {
+                        if !self.delete_sheet(&sheet_id) {
                             return Err(Self::bad_response(format!(
                                 "sheet with id {sheet_id} not found to delete!"
                             )));
