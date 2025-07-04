@@ -522,6 +522,7 @@ mod tests {
         });
 
         let is_shutdown_clone = is_shutdown.clone();
+        tokio::time::sleep(Duration::from_secs(3)).await;
         let checker_handle = tokio::spawn(async move {
             HealthcheckService::run_check(
                 is_shutdown_clone,
@@ -577,6 +578,7 @@ mod tests {
             }
         });
 
+        tokio::time::sleep(Duration::from_secs(3)).await;
         let is_shutdown_clone = is_shutdown.clone();
         let checker_handle = tokio::spawn(async move {
             HealthcheckService::run_check(
@@ -654,7 +656,7 @@ mod tests {
         });
 
         let is_shutdown_clone = is_shutdown.clone();
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        tokio::time::sleep(Duration::from_secs(3)).await;
         let checker_handle = tokio::spawn(async move {
             HealthcheckService::run_check(
                 is_shutdown_clone,
