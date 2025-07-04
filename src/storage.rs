@@ -47,7 +47,7 @@ impl AppendableLog {
         }
     }
 
-    async fn fetch_tables(&mut self) -> Result<(), StorageError> {
+    async fn fetch_tables(&self) -> Result<HashMap<TableId, Table>, StorageError> {
         let tables: HashMap<TableId, Table> = self
             .storage
             .tables_for_service(&self.spreadsheet_id, &self.service)
@@ -56,11 +56,15 @@ impl AppendableLog {
             .map(|t| (*t.id(), t))
             .collect();
 
+        Ok(tables)
+    }
+
+    fn update_tables(&mut self, fetched_tables: HashMap<TableId, Table>) {
         // If some table isn't loaded but is considered to be updated
         // it means it was deleted between updates
         // we need to mark it for re-creation
         for (id, previous_table) in self.tables.iter_mut() {
-            if tables.contains_key(id)
+            if fetched_tables.contains_key(id)
                 || previous_table.to_be_deleted()
                 || previous_table.to_be_created()
             {
@@ -69,7 +73,7 @@ impl AppendableLog {
             previous_table.plan_to_recreate();
         }
 
-        for t in tables.into_values() {
+        for t in fetched_tables.into_values() {
             let id = t.id();
             if let Some(previous) = self.tables.get_mut(id) {
                 *previous += t;
@@ -77,12 +81,11 @@ impl AppendableLog {
                 self.tables.insert(*id, t);
             }
         }
-
-        Ok(())
     }
 
     pub async fn healthcheck(&mut self) -> Result<(), StorageError> {
-        self.fetch_tables().await?;
+        let tables = self.fetch_tables().await?;
+        self.update_tables(tables);
         Ok(())
     }
 
@@ -99,22 +102,24 @@ impl AppendableLog {
     }
 
     // https://developers.google.com/sheets/api/limits#example-algorithm
-    async fn exponential_backoff<T>(
+    async fn exponential_backoff<T, F>(
         service: &str,
         maximum_backoff: Duration,
-        fut: impl Future<Output = Result<T, StorageError>>,
-    ) -> Result<T, StorageError> {
+        f: impl Fn() -> F,
+    ) -> Result<T, StorageError>
+    where
+        F: Future<Output = Result<T, StorageError>>,
+    {
         let mut total_time = Duration::from_millis(0);
         let mut wait = Duration::from_millis(2);
         let mut retry = 0;
         let max_backoff = tokio::time::sleep(maximum_backoff);
         tokio::pin!(max_backoff);
         let mut last_retry_error = format!("timeout {maximum_backoff:?}");
-        tokio::pin!(fut);
         while total_time < maximum_backoff {
             tokio::select! {
                 _ = &mut max_backoff => {break;}
-                res = &mut fut => {
+                res = f() => {
                     if let Err(StorageError::Retriable(e)) = res {
                         tracing::error!("error {:?} for service `{}` retrying #{}", e, service, retry);
                         last_retry_error = e;
@@ -142,14 +147,18 @@ impl AppendableLog {
         )))
     }
 
-    async fn timed_fetch_tables(&mut self, maximum_backoff: Duration) -> Result<(), StorageError> {
+    async fn timed_fetch_tables(
+        &mut self,
+        maximum_backoff: Duration,
+    ) -> Result<HashMap<TableId, Table>, StorageError> {
         let service = self.service.clone();
-        Self::exponential_backoff(&service, maximum_backoff, self.fetch_tables()).await
+        let callback = || async { self.fetch_tables().await };
+        Self::exponential_backoff(&service, maximum_backoff, callback).await
     }
 
     // for newly created log sheet its headers order is determined by its first datarow. Fields for other datarows for the same sheet are sorted accordingly.
     async fn core_append(&mut self, retry_limit: Option<Duration>) -> Result<(), StorageError> {
-        if let Some(retry_limit) = retry_limit {
+        let tables = if let Some(retry_limit) = retry_limit {
             // We do not retry sheet `crud` as it goes after
             // `fetch_sheets` which is retriable and should
             // either fix an error or fail.
@@ -159,6 +168,8 @@ impl AppendableLog {
         } else {
             self.fetch_tables().await?
         };
+
+        self.update_tables(tables);
 
         tracing::debug!("existing tables:\n{:#?}", self.tables);
 
@@ -341,10 +352,15 @@ impl AppendableLog {
         let rules_table_id = self.rules_table_id.expect(
             "assert: rules sheet id is saved at the start of the service at the first append",
         );
+        let callback = || async {
+            self.storage
+                .get_table(&self.spreadsheet_id, rules_table_id)
+                .await
+        };
         let data = Self::exponential_backoff(
             &service,
             Duration::from_secs(MAX_GOOGLE_REQUEST_DURATION_SECS.into()),
-            self.storage.get_table(&self.spreadsheet_id, rules_table_id),
+            callback,
         )
         .await?;
 
