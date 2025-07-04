@@ -521,6 +521,7 @@ mod tests {
             }
         });
 
+        tokio::time::sleep(Duration::from_secs(3)).await;
         let is_shutdown_clone = is_shutdown.clone();
         let checker_handle = tokio::spawn(async move {
             if let Some(TaskResult {
