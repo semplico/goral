@@ -436,7 +436,7 @@ mod tests {
     use std::net::TcpListener;
     use tokio::sync::mpsc;
 
-    const NOTIFICATION_WAIT_SEC: u8 = 5;
+    const NOTIFICATION_WAIT_SEC: u64 = 5;
 
     #[test]
     fn liveness_name_usage() {
