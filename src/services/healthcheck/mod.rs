@@ -436,6 +436,8 @@ mod tests {
     use std::net::TcpListener;
     use tokio::sync::mpsc;
 
+    const NOTIFICATION_WAIT_SEC: u8 = 5;
+
     #[test]
     fn liveness_name_usage() {
         let liveness = Liveness {
@@ -534,7 +536,7 @@ mod tests {
         });
 
         is_shutdown.store(true, Ordering::Release);
-        tokio::time::sleep(Duration::from_secs(4)).await;
+        tokio::time::sleep(Duration::from_secs(NOTIFICATION_WAIT_SEC)).await;
         data_receiver.close();
 
         if let Some(TaskResult {
@@ -591,7 +593,7 @@ mod tests {
         });
 
         is_shutdown.store(true, Ordering::Release);
-        tokio::time::sleep(Duration::from_secs(4)).await;
+        tokio::time::sleep(Duration::from_secs(NOTIFICATION_WAIT_SEC)).await;
         data_receiver.close();
         let expected = format!("status code: 500\n\n{UNHEALTHY_REPLY}");
 
@@ -667,7 +669,7 @@ mod tests {
         });
 
         is_shutdown.store(true, Ordering::Release);
-        tokio::time::sleep(Duration::from_secs(4)).await;
+        tokio::time::sleep(Duration::from_secs(NOTIFICATION_WAIT_SEC)).await;
         data_receiver.close();
 
         if let Some(TaskResult {
