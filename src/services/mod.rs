@@ -548,6 +548,10 @@ pub trait Service: Send + Sync {
                     return;
                 },
                 _ = push_interval.tick() => {
+                    let rows_count = log.new_rows();
+                    if rows_count == 0 {
+                        continue;
+                    }
                     let example_rules = self.get_example_rules();
                     example_rules.into_iter().for_each(|mut r| log.plan_to_append(&mut r));
                     let rows_count = log.new_rows();

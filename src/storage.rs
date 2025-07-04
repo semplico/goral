@@ -9,6 +9,7 @@ use crate::rules::{Rule, RULES_LOG_NAME};
 use crate::{get_service_tab_color, jitter_duration};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -98,22 +99,27 @@ impl AppendableLog {
     }
 
     // https://developers.google.com/sheets/api/limits#example-algorithm
-    async fn timed_fetch_tables(&mut self, maximum_backoff: Duration) -> Result<(), StorageError> {
+    async fn exponential_backoff<T>(
+        service: &str,
+        maximum_backoff: Duration,
+        fut: impl Future<Output = Result<T, StorageError>>,
+    ) -> Result<T, StorageError> {
         let mut total_time = Duration::from_millis(0);
         let mut wait = Duration::from_millis(2);
         let mut retry = 0;
         let max_backoff = tokio::time::sleep(maximum_backoff);
         tokio::pin!(max_backoff);
         let mut last_retry_error = format!("timeout {maximum_backoff:?}");
+        tokio::pin!(fut);
         while total_time < maximum_backoff {
             tokio::select! {
                 _ = &mut max_backoff => {break;}
-                res = self.fetch_tables() => {
+                res = &mut fut => {
                     if let Err(StorageError::Retriable(e)) = res {
-                        tracing::error!("error {:?} for service `{}` retrying #{}", e, self.service, retry);
+                        tracing::error!("error {:?} for service `{}` retrying #{}", e, service, retry);
                         last_retry_error = e;
                     } else {
-                        return Ok(());
+                        return res;
                     }
                 }
             }
@@ -123,7 +129,7 @@ impl AppendableLog {
                 "waiting {:?} for retry {} for service `{}`",
                 jittered,
                 retry,
-                self.service
+                service
             );
             tokio::time::sleep(jittered).await;
             total_time += jittered;
@@ -134,6 +140,11 @@ impl AppendableLog {
             retry,
             last_retry_error,
         )))
+    }
+
+    async fn timed_fetch_tables(&mut self, maximum_backoff: Duration) -> Result<(), StorageError> {
+        let service = self.service.clone();
+        Self::exponential_backoff(&service, maximum_backoff, self.fetch_tables()).await
     }
 
     // for newly created log sheet its headers order is determined by its first datarow. Fields for other datarows for the same sheet are sorted accordingly.
@@ -326,25 +337,21 @@ impl AppendableLog {
     }
 
     pub async fn get_rules(&self) -> Result<Vec<Rule>, StorageError> {
-        let timeout = Duration::from_millis(2000);
+        let service = self.service.clone();
         let rules_table_id = self.rules_table_id.expect(
             "assert: rules sheet id is saved at the start of the service at the first append",
         );
-        tokio::select! {
-            _ = tokio::time::sleep(timeout) => Err(StorageError::Timeout(timeout)),
-            res = self
-                .storage
-                .get_table(
-                    &self.spreadsheet_id,
-                    rules_table_id
-                ) => {
-                    let data = res?;
-                    Ok(data.into_iter()
-                        .filter_map(|row| Rule::try_from_values(row, self.messenger.as_ref()))
-                        .collect()
-                    )
-            }
-        }
+        let data = Self::exponential_backoff(
+            &service,
+            Duration::from_secs(MAX_GOOGLE_REQUEST_DURATION_SECS.into()),
+            self.storage.get_table(&self.spreadsheet_id, rules_table_id),
+        )
+        .await?;
+
+        Ok(data
+            .into_iter()
+            .filter_map(|row| Rule::try_from_values(row, self.messenger.as_ref()))
+            .collect())
     }
 }
 
