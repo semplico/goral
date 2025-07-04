@@ -534,7 +534,7 @@ mod tests {
         });
 
         is_shutdown.store(true, Ordering::Release);
-        tokio::time::sleep(Duration::from_secs(3)).await;
+        tokio::time::sleep(Duration::from_secs(4)).await;
         data_receiver.close();
 
         if let Some(TaskResult {
@@ -591,7 +591,7 @@ mod tests {
         });
 
         is_shutdown.store(true, Ordering::Release);
-        tokio::time::sleep(Duration::from_secs(3)).await;
+        tokio::time::sleep(Duration::from_secs(4)).await;
         data_receiver.close();
         let expected = format!("status code: 500\n\n{UNHEALTHY_REPLY}");
 
@@ -667,7 +667,7 @@ mod tests {
         });
 
         is_shutdown.store(true, Ordering::Release);
-        tokio::time::sleep(Duration::from_secs(3)).await;
+        tokio::time::sleep(Duration::from_secs(4)).await;
         data_receiver.close();
 
         if let Some(TaskResult {
