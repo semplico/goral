@@ -177,7 +177,7 @@ impl HealthcheckService {
                             }
                         }
                     }
-                    _ => Err(format!("unknown url scheme for probe {:?}", liveness)),
+                    _ => Err(format!("unknown url scheme for probe {liveness:?}")),
                 }
             }
             Probe::Command(command) => {
@@ -323,7 +323,7 @@ impl HealthcheckService {
         let (level, message) = if is_alive {
             (
                 Level::INFO,
-                format!("Liveness probe for `{:?}` succeeded", liveness),
+                format!("Liveness probe for `{liveness:?}` succeeded"),
             )
         } else {
             (Level::ERROR,

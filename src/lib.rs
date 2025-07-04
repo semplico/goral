@@ -110,7 +110,7 @@ pub fn collect_messengers(
     for (messenger_host, services) in hosts {
         let messenger = messenger_host.map(|host| {
             let messenger = get_messenger(&host)
-                .unwrap_or_else(|_| panic!("failed to create messenger for host `{}`", host));
+                .unwrap_or_else(|_| panic!("failed to create messenger for host `{host}`"));
             Arc::new(messenger)
         });
         for service in services {

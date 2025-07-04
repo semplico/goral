@@ -18,7 +18,7 @@ pub(super) const METADATA_KEYS: &str = "keys";
 pub(super) const KEYS_DELIMITER: &str = "~^~";
 
 pub(super) fn generate_metadata_id(key: &str, sheet_id: TableId) -> i32 {
-    str_to_id(&format!("{}{}", sheet_id, key))
+    str_to_id(&format!("{sheet_id}{key}"))
 }
 
 #[derive(Debug, Clone, PartialEq)]

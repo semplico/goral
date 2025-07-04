@@ -715,9 +715,9 @@ impl fmt::Display for StorageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use StorageError::*;
         match self {
-            Timeout(duration) => write!(f, "Google API timeout {:?}", duration),
+            Timeout(duration) => write!(f, "Google API timeout {duration:?}"),
             RetryTimeout((maximum_backoff, retry, last_retry_error)) => write!(f, "Google API is unavailable ({last_retry_error}): maximum retry duration {maximum_backoff:?} is reached with {retry} retries"),
-            Retriable(e) | NonRetriable(e) => write!(f, "Google API: {}", e),
+            Retriable(e) | NonRetriable(e) => write!(f, "Google API: {e}"),
         }
     }
 }

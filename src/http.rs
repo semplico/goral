@@ -196,7 +196,7 @@ where
     let listener = match TcpListener::bind(addr).await {
         Ok(listener) => listener,
         Err(e) => {
-            let msg = format!("{name} server cannot listen for connections `{}`", e);
+            let msg = format!("{name} server cannot listen for connections `{e}`");
             tracing::error!("{}", msg);
             send_notification.fatal(msg.clone()).await;
             panic!("{}", msg);
@@ -219,7 +219,7 @@ where
                     match res {
                         Ok(res) => res,
                         Err(e) => {
-                            let msg = format!("{name} server cannot accept a connection `{}`", e);
+                            let msg = format!("{name} server cannot accept a connection `{e}`");
                             tracing::error!("{}", msg);
                             send_notification_clone.error(msg).await;
                             continue;
@@ -250,7 +250,7 @@ where
                     }
                     res = conn.as_mut() => {
                         if let Err(e) = res {
-                            let msg = format!("error serving connection by {name} server {:?}", e);
+                            let msg = format!("error serving connection by {name} server {e:?}");
                             tracing::error!("{}", msg);
                             send_notification_clone_clone.error(msg.to_string()).await;
                         }

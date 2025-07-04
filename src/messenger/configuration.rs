@@ -39,10 +39,10 @@ impl Debug for MessengerImplementation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Telegram { chat_id } => {
-                write!(f, "Telegram({})", chat_id)
+                write!(f, "Telegram({chat_id})")
             }
             Self::Slack { channel, .. } => {
-                write!(f, "Slack({})", channel)
+                write!(f, "Slack({channel})")
             }
             Self::Discord => {
                 write!(f, "Discord")

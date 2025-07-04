@@ -54,8 +54,7 @@ pub fn host_validation(url: &Url) -> Result<(), serde_valid::validation::Error> 
     url.host()
         .map(|_| ())
         .ok_or(serde_valid::validation::Error::Custom(format!(
-            "host for url {} should be specified",
-            url
+            "host for url {url} should be specified"
         )))
 }
 
@@ -66,8 +65,7 @@ pub fn port_validation(url: &Url) -> Result<(), serde_valid::validation::Error> 
             .port()
             .map(|_| ())
             .ok_or(serde_valid::validation::Error::Custom(format!(
-                "port for url {} should be specified",
-                url
+                "port for url {url} should be specified"
             ))),
     }
 }
@@ -169,8 +167,7 @@ impl Configuration {
             if total > 100.0 {
                 write!(
                     &mut message,
-                    "current usage limits sum up to {}% for [spreadsheet]({}{}),",
-                    total, GOOGLE_SHEET_BASE, spreadsheet_id
+                    "current usage limits sum up to {total}% for [spreadsheet]({GOOGLE_SHEET_BASE}{spreadsheet_id}),"
                 )
                 .expect("assert: can write to string");
             }

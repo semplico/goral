@@ -168,7 +168,7 @@ impl SystemService {
         request: SystemInfoRequest,
     ) -> Result<(), String> {
         tokio::select! {
-            _ = tokio::time::sleep(timeout) => Err(format!("sysinfo request timeout {:?}", timeout)),
+            _ = tokio::time::sleep(timeout) => Err(format!("sysinfo request timeout {timeout:?}")),
             res = request_tx.send(request) => res.map_err(|e| e.to_string())
         }
     }
@@ -209,7 +209,7 @@ impl SystemService {
                     let source = match ssh_versions().await {
                         Ok(source) => source,
                         Err(e) => {
-                            let msg = format!("error sending ssh versions request `{}`", e);
+                            let msg = format!("error sending ssh versions request `{e}`");
                             tracing::error!("{}", msg);
                             messenger.error(msg).await;
                             continue;
@@ -221,7 +221,7 @@ impl SystemService {
                             tracing::info!("finished system updates checking");
                             return;
                         }
-                        let msg = format!("error making ssh version check request `{}`", e);
+                        let msg = format!("error making ssh version check request `{e}`");
                         tracing::error!("{}", msg);
                         send_notification.fatal(msg).await;
                     }
@@ -256,7 +256,7 @@ impl SystemService {
                             tracing::info!("finished system updates checking");
                             return;
                         }
-                        let msg = format!("error making system support check request `{}`", e);
+                        let msg = format!("error making system support check request `{e}`");
                         tracing::error!("{}", msg);
                         send_notification.fatal(msg).await;
                     }
@@ -302,7 +302,7 @@ impl SystemService {
         .await
         {
             if !is_shutdown.load(Ordering::Relaxed) {
-                let msg = format!("error requesting os name `{}`", e);
+                let msg = format!("error requesting os name `{e}`");
                 tracing::error!("{}", msg);
                 send_notification.fatal(msg).await;
             }
@@ -353,7 +353,7 @@ impl SystemService {
                             tracing::info!("finished sysinfo collection");
                             return;
                         }
-                        let msg = format!("error sending request for sysinfo `{}`", e);
+                        let msg = format!("error sending request for sysinfo `{e}`");
                         tracing::error!("{}", msg);
                         send_notification.fatal(msg).await;
                     }
@@ -487,7 +487,7 @@ impl Service for SystemService {
             Ok(data) => data,
             Err(Data::Message(msg)) => {
                 tracing::error!("{}", msg);
-                self.send_error(format!("`{}` while observing system", msg))
+                self.send_error(format!("`{msg}` while observing system"))
                     .await;
                 Data::Empty
             }

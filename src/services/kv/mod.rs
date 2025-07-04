@@ -44,8 +44,7 @@ fn unique_keys(data: &[(String, Value)]) -> Result<(), serde_valid::validation::
 fn is_not_reserved_name(log_name: &String) -> Result<(), serde_valid::validation::Error> {
     if log_name == RULES_LOG_NAME {
         Err(serde_valid::validation::Error::Custom(format!(
-            "`log_name` cannot be a reserved name: [{}]",
-            RULES_LOG_NAME
+            "`log_name` cannot be a reserved name: [{RULES_LOG_NAME}]"
         )))
     } else {
         Ok(())
@@ -58,7 +57,7 @@ where
 {
     let buf = String::deserialize(deserializer)?;
     capture_datetime(&buf)
-        .ok_or_else(|| serde::de::Error::custom(format!("cannot deserialize {} as datetime", buf)))
+        .ok_or_else(|| serde::de::Error::custom(format!("cannot deserialize {buf} as datetime")))
 }
 
 // for untagged enum an order is important

@@ -70,12 +70,12 @@ impl fmt::Display for RuleCondition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use RuleCondition::*;
         match self {
-            Less => write!(f, "{}", LESS_CONDITION),
-            Greater => write!(f, "{}", GREATER_CONDITION),
-            Is => write!(f, "{}", IS_CONDITION),
-            IsNot => write!(f, "{}", IS_NOT_CONDITION),
-            Contains => write!(f, "{}", CONTAINS_CONDITION),
-            NotContains => write!(f, "{}", NOT_CONTAINS_CONDITION),
+            Less => write!(f, "{LESS_CONDITION}"),
+            Greater => write!(f, "{GREATER_CONDITION}"),
+            Is => write!(f, "{IS_CONDITION}"),
+            IsNot => write!(f, "{IS_NOT_CONDITION}"),
+            Contains => write!(f, "{CONTAINS_CONDITION}"),
+            NotContains => write!(f, "{NOT_CONTAINS_CONDITION}"),
         }
     }
 }
@@ -108,10 +108,10 @@ impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Action::*;
         match self {
-            Info => write!(f, "{}", INFO_ACTION),
-            Warn => write!(f, "{}", WARN_ACTION),
-            Error => write!(f, "{}", ERROR_ACTION),
-            SkipFurtherRules => write!(f, "{}", SKIP_ACTION),
+            Info => write!(f, "{INFO_ACTION}"),
+            Warn => write!(f, "{WARN_ACTION}"),
+            Error => write!(f, "{ERROR_ACTION}"),
+            SkipFurtherRules => write!(f, "{SKIP_ACTION}"),
         }
     }
 }
