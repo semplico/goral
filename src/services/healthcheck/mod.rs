@@ -521,32 +521,33 @@ mod tests {
             }
         });
 
-        tokio::time::sleep(Duration::from_secs(3)).await;
         let is_shutdown_clone = is_shutdown.clone();
         let checker_handle = tokio::spawn(async move {
-            if let Some(TaskResult {
-                result: Ok(Data::Single(datarow)),
-                ..
-            }) = data_receiver.recv().await
-            {
-                assert_eq!(
-                    datarow.keys_values().get("output"),
-                    Some(&Datavalue::Text(HEALTHY_REPLY.to_string()))
-                );
-            } else {
-                panic!("test assert: at least one successful probe should be collected");
-            }
-            is_shutdown.store(true, Ordering::Release);
+            HealthcheckService::run_check(
+                is_shutdown_clone,
+                0,
+                liveness,
+                data_sender,
+                send_notification,
+            )
+            .await;
         });
 
-        HealthcheckService::run_check(
-            is_shutdown_clone,
-            0,
-            liveness,
-            data_sender,
-            send_notification,
-        )
-        .await;
+        is_shutdown.store(true, Ordering::Release);
+
+        if let Some(TaskResult {
+            result: Ok(Data::Single(datarow)),
+            ..
+        }) = data_receiver.recv().await
+        {
+            assert_eq!(
+                datarow.keys_values().get("output"),
+                Some(&Datavalue::Text(HEALTHY_REPLY.to_string()))
+            );
+        } else {
+            panic!("test assert: at least one successful probe should be collected");
+        }
+        data_receiver.close();
 
         checker_handle.await.unwrap(); // checker should finish as the data channel is closed
         notifications.await.unwrap();
@@ -576,48 +577,48 @@ mod tests {
             }
         });
 
-        tokio::time::sleep(Duration::from_secs(3)).await;
         let is_shutdown_clone = is_shutdown.clone();
         let checker_handle = tokio::spawn(async move {
-            let expected = format!("status code: 500\n\n{UNHEALTHY_REPLY}");
-
-            if let Some(TaskResult {
-                result: Err(Data::Single(datarow)),
-                ..
-            }) = data_receiver.recv().await
-            {
-                assert_eq!(
-                    datarow.keys_values().get("output"),
-                    Some(&Datavalue::Text(expected.clone()))
-                );
-            } else {
-                panic!("test assert: at least one unsuccessful probe should be collected");
-            }
-
-            if let Some(TaskResult {
-                result: Err(Data::Single(datarow)),
-                ..
-            }) = data_receiver.recv().await
-            {
-                assert_eq!(
-                    datarow.keys_values().get("output"),
-                    Some(&Datavalue::Text(expected))
-                );
-            } else {
-                panic!("test assert: second unsuccessful probe should be collected");
-            }
-
-            is_shutdown.store(true, Ordering::Release);
+            HealthcheckService::run_check(
+                is_shutdown_clone,
+                0,
+                liveness,
+                data_sender,
+                send_notification,
+            )
+            .await;
         });
 
-        HealthcheckService::run_check(
-            is_shutdown_clone,
-            0,
-            liveness,
-            data_sender,
-            send_notification,
-        )
-        .await;
+        is_shutdown.store(true, Ordering::Release);
+        let expected = format!("status code: 500\n\n{UNHEALTHY_REPLY}");
+
+        if let Some(TaskResult {
+            result: Err(Data::Single(datarow)),
+            ..
+        }) = data_receiver.recv().await
+        {
+            assert_eq!(
+                datarow.keys_values().get("output"),
+                Some(&Datavalue::Text(expected.clone()))
+            );
+        } else {
+            panic!("test assert: at least one unsuccessful probe should be collected");
+        }
+
+        if let Some(TaskResult {
+            result: Err(Data::Single(datarow)),
+            ..
+        }) = data_receiver.recv().await
+        {
+            assert_eq!(
+                datarow.keys_values().get("output"),
+                Some(&Datavalue::Text(expected))
+            );
+        } else {
+            panic!("test assert: second unsuccessful probe should be collected");
+        }
+
+        data_receiver.close();
 
         checker_handle.await.unwrap(); // checker should finish as the data channel is closed
         notifications.await.unwrap();
@@ -652,38 +653,39 @@ mod tests {
             }
         });
 
-        tokio::time::sleep(Duration::from_secs(3)).await;
         let is_shutdown_clone = is_shutdown.clone();
+        tokio::time::sleep(Duration::from_millis(50)).await;
         let checker_handle = tokio::spawn(async move {
-            if let Some(TaskResult {
-                result: Ok(Data::Single(datarow)),
-                ..
-            }) = data_receiver.recv().await
-            {
-                assert_eq!(
-                    datarow.keys_values().get("output"),
-                    Some(&Datavalue::Text(HEALTHY_REPLY.to_string()))
-                );
-                let Datavalue::Integer(latency) = *datarow.keys_values().get("latency_ms").unwrap()
-                else {
-                    panic!("latency is an integer in ms")
-                };
-                assert!(latency < 200);
-            } else {
-                panic!("test assert: at least one successful probe should be collected");
-            }
-
-            is_shutdown.store(true, Ordering::Release);
+            HealthcheckService::run_check(
+                is_shutdown_clone,
+                0,
+                liveness,
+                data_sender,
+                send_notification,
+            )
+            .await;
         });
 
-        HealthcheckService::run_check(
-            is_shutdown_clone,
-            0,
-            liveness,
-            data_sender,
-            send_notification,
-        )
-        .await;
+        is_shutdown.store(true, Ordering::Release);
+
+        if let Some(TaskResult {
+            result: Ok(Data::Single(datarow)),
+            ..
+        }) = data_receiver.recv().await
+        {
+            assert_eq!(
+                datarow.keys_values().get("output"),
+                Some(&Datavalue::Text(HEALTHY_REPLY.to_string()))
+            );
+            let Datavalue::Integer(latency) = *datarow.keys_values().get("latency_ms").unwrap()
+            else {
+                panic!("latency is an integer in ms")
+            };
+            assert!(latency < 200);
+        } else {
+            panic!("test assert: at least one successful probe should be collected");
+        }
+        data_receiver.close();
 
         checker_handle.await.unwrap(); // checker should finish as the data channel is closed
         notifications.await.unwrap();
