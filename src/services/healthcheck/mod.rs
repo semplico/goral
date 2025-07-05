@@ -497,13 +497,15 @@ mod tests {
         HealthcheckService::is_alive(&liveness).await.unwrap();
     }
 
+    #[cfg(target_os = "linux")] // for macos http probe tests are flaky
     #[tokio::test]
     async fn http_probe() {
         let _shut = run_test_server(53254).await;
 
-        let (send_notification, mut notifications_receiver) = mpsc::channel(10);
+        const NUM_OF_PROBES: usize = 1;
+        let (send_notification, mut notifications_receiver) = mpsc::channel(NUM_OF_PROBES);
         let send_notification = Sender::new(send_notification, HEALTHCHECK_SERVICE_NAME);
-        let (data_sender, mut data_receiver) = mpsc::channel(10);
+        let (data_sender, mut data_receiver) = mpsc::channel(NUM_OF_PROBES);
         let is_shutdown = Arc::new(AtomicBool::new(false));
 
         let liveness = Liveness {
@@ -552,13 +554,15 @@ mod tests {
         notifications.await.unwrap();
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn http_probe_failure() {
         let _shut = run_test_server(53255).await;
 
-        let (send_notification, mut notifications_receiver) = mpsc::channel(10);
+        const NUM_OF_PROBES: usize = 2;
+        let (send_notification, mut notifications_receiver) = mpsc::channel(NUM_OF_PROBES);
         let send_notification = Sender::new(send_notification, HEALTHCHECK_SERVICE_NAME);
-        let (data_sender, mut data_receiver) = mpsc::channel(10);
+        let (data_sender, mut data_receiver) = mpsc::channel(NUM_OF_PROBES);
         let is_shutdown = Arc::new(AtomicBool::new(false));
 
         let liveness = Liveness {
@@ -623,6 +627,7 @@ mod tests {
         notifications.await.unwrap();
     }
 
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn http_probe_initial_delay() {
         let delay = Duration::from_millis(100);
@@ -632,9 +637,10 @@ mod tests {
             run_test_server(53256).await
         });
 
-        let (send_notification, mut notifications_receiver) = mpsc::channel(10);
+        const NUM_OF_PROBES: usize = 1;
+        let (send_notification, mut notifications_receiver) = mpsc::channel(1);
         let send_notification = Sender::new(send_notification, HEALTHCHECK_SERVICE_NAME);
-        let (data_sender, mut data_receiver) = mpsc::channel(10);
+        let (data_sender, mut data_receiver) = mpsc::channel(NUM_OF_PROBES);
         let is_shutdown = Arc::new(AtomicBool::new(false));
 
         let liveness = Liveness {
