@@ -501,10 +501,9 @@ mod tests {
     async fn http_probe() {
         let _shut = run_test_server(53254).await;
 
-        const NUM_OF_PROBES: usize = 1;
-        let (send_notification, mut notifications_receiver) = mpsc::channel(1);
+        let (send_notification, mut notifications_receiver) = mpsc::channel(10);
         let send_notification = Sender::new(send_notification, HEALTHCHECK_SERVICE_NAME);
-        let (data_sender, mut data_receiver) = mpsc::channel(NUM_OF_PROBES);
+        let (data_sender, mut data_receiver) = mpsc::channel(10);
         let is_shutdown = Arc::new(AtomicBool::new(false));
 
         let liveness = Liveness {
@@ -522,7 +521,6 @@ mod tests {
         });
 
         let is_shutdown_clone = is_shutdown.clone();
-        tokio::time::sleep(Duration::from_secs(3)).await;
         let checker_handle = tokio::spawn(async move {
             HealthcheckService::run_check(
                 is_shutdown_clone,
@@ -558,10 +556,9 @@ mod tests {
     async fn http_probe_failure() {
         let _shut = run_test_server(53255).await;
 
-        const NUM_OF_PROBES: usize = 2;
-        let (send_notification, mut notifications_receiver) = mpsc::channel(NUM_OF_PROBES);
+        let (send_notification, mut notifications_receiver) = mpsc::channel(10);
         let send_notification = Sender::new(send_notification, HEALTHCHECK_SERVICE_NAME);
-        let (data_sender, mut data_receiver) = mpsc::channel(NUM_OF_PROBES);
+        let (data_sender, mut data_receiver) = mpsc::channel(10);
         let is_shutdown = Arc::new(AtomicBool::new(false));
 
         let liveness = Liveness {
@@ -635,10 +632,9 @@ mod tests {
             run_test_server(53256).await
         });
 
-        const NUM_OF_PROBES: usize = 1;
-        let (send_notification, mut notifications_receiver) = mpsc::channel(1);
+        let (send_notification, mut notifications_receiver) = mpsc::channel(10);
         let send_notification = Sender::new(send_notification, HEALTHCHECK_SERVICE_NAME);
-        let (data_sender, mut data_receiver) = mpsc::channel(NUM_OF_PROBES);
+        let (data_sender, mut data_receiver) = mpsc::channel(10);
         let is_shutdown = Arc::new(AtomicBool::new(false));
 
         let liveness = Liveness {
