@@ -497,7 +497,8 @@ mod tests {
         HealthcheckService::is_alive(&liveness).await.unwrap();
     }
 
-    #[cfg(target_os = "linux")] // for macos http probe tests are flaky
+    // for macos and windows the test is flaky
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn http_probe() {
         let _shut = run_test_server(53254).await;
@@ -554,6 +555,7 @@ mod tests {
         notifications.await.unwrap();
     }
 
+    // for macos and windows the test is flaky
     #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn http_probe_failure() {
@@ -627,6 +629,7 @@ mod tests {
         notifications.await.unwrap();
     }
 
+    // for macos and windows the test is flaky
     #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn http_probe_initial_delay() {
