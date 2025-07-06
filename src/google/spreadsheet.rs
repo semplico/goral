@@ -62,18 +62,15 @@ async fn handle_error<T>(
                 tracing::error!("{}", e);
                 spreadsheet
                     .send_notification
-                    .fatal(format!("Fatal error for Google API access\n```{}```", e))
+                    .fatal(format!("Fatal error for Google API access\n```{e}```"))
                     .await;
-                panic!("Fatal error for Google API access: `{}`", e);
+                panic!("Fatal error for Google API access: `{e}`");
             }
             SheetsError::MissingToken(_) => {
                 let msg = format!("`MissingToken error` for Google API\nProbably server time skewed which is now `{}`\nSync server time with NTP", Utc::now());
                 tracing::error!("{}{}", e, msg);
                 spreadsheet.send_notification.fatal(msg).await;
-                panic!(
-                    "{}Probably server time skewed. Sync server time with NTP.",
-                    e
-                );
+                panic!("{e}Probably server time skewed. Sync server time with NTP.");
             }
             SheetsError::UploadSizeLimitExceeded(actual, limit) => {
                 let msg = format!("uploading to much data {actual} vs limit of {limit} bytes");
@@ -82,7 +79,7 @@ async fn handle_error<T>(
                     .send_notification
                     .fatal(format!("Fatal error for Google API access\n```{msg}```"))
                     .await;
-                panic!("Fatal error for Google API access: `{}`", msg);
+                panic!("Fatal error for Google API access: `{msg}`");
             }
             // retry
             SheetsError::Failure(v) => Err(StorageError::Retriable(format!("failure: {v:?}"))),

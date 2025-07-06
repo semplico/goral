@@ -338,7 +338,7 @@ impl Service for LogsService {
             Ok(data) => data,
             Err(Data::Message(msg)) => {
                 tracing::error!("{}", msg);
-                self.send_error(format!("`{}` while collecting logs from stdin", msg))
+                self.send_error(format!("`{msg}` while collecting logs from stdin"))
                     .await;
                 Data::Empty
             }

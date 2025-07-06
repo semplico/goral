@@ -30,7 +30,7 @@ impl Slack {
             .client
             .post_json(
                 url,
-                vec![("authorization", format!("Bearer {}", token))],
+                vec![("authorization", format!("Bearer {token}"))],
                 &body,
             )
             .await?;

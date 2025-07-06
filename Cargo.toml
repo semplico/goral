@@ -1,6 +1,6 @@
 [package]
 name = "goral"
-version = "0.1.13"
+version = "0.1.14"
 edition = "2021"
 author = "Maksim Ryndin"
 license = "Apache-2.0"
@@ -45,18 +45,18 @@ serde_derive = { version = "^1.0", default-features = false}
 serde_json = { version = "^1.0", default-features = false}
 serde_valid = { version = "1.0", default-features = false, features = ["toml"] }
 sysinfo = { version = "0.35", default-features = false, features = ["system", "network", "user", "disk"]  }
-tokio = { version = "^1.45", default-features = false, features = ["sync", "signal", "io-std", "process", "net"] }
-tonic = { version = "^0.12", default-features = false, features = ["transport", "prost"]}
-tonic-health = { version = "0.12", default-features = false, features = ["transport"]}
+tokio = { version = "^1.46", default-features = false, features = ["sync", "signal", "io-std", "process", "net"] }
+tonic = { version = "^0.13", default-features = false, features = ["router", "transport", "prost"]}
+tonic-health = { version = "0.13", default-features = false}
 tracing = { version = "0.1", default-features = false}
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "json", "env-filter", "ansi"] }
 url = { version = "2", default-features = false, features = ["serde"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 logwatcher2 = { git = "https://github.com/maksimryndin/logwatcher2.git", rev="9124084dedf7cca548a7be01f0195b876683749a" }
-psutil = { version = "4.0.0", default-features = false, features = ["disk"]}
+psutil = { version = "5.3.0", default-features = false, features = ["disk"]}
 
 [dev-dependencies]
-prost = "0.12"
+prost = "0.13"
 rand = "0.9"
-tonic-build = "0.12"
+tonic-build = "0.13"

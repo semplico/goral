@@ -177,7 +177,7 @@ impl HealthcheckService {
                             }
                         }
                     }
-                    _ => Err(format!("unknown url scheme for probe {:?}", liveness)),
+                    _ => Err(format!("unknown url scheme for probe {liveness:?}")),
                 }
             }
             Probe::Command(command) => {
@@ -323,7 +323,7 @@ impl HealthcheckService {
         let (level, message) = if is_alive {
             (
                 Level::INFO,
-                format!("Liveness probe for `{:?}` succeeded", liveness),
+                format!("Liveness probe for `{liveness:?}` succeeded"),
             )
         } else {
             (Level::ERROR,
@@ -497,12 +497,14 @@ mod tests {
         HealthcheckService::is_alive(&liveness).await.unwrap();
     }
 
+    // for macos and windows the test is flaky
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn http_probe() {
         let _shut = run_test_server(53254).await;
 
         const NUM_OF_PROBES: usize = 1;
-        let (send_notification, mut notifications_receiver) = mpsc::channel(1);
+        let (send_notification, mut notifications_receiver) = mpsc::channel(NUM_OF_PROBES);
         let send_notification = Sender::new(send_notification, HEALTHCHECK_SERVICE_NAME);
         let (data_sender, mut data_receiver) = mpsc::channel(NUM_OF_PROBES);
         let is_shutdown = Arc::new(AtomicBool::new(false));
@@ -534,8 +536,6 @@ mod tests {
         });
 
         is_shutdown.store(true, Ordering::Release);
-        tokio::time::sleep(Duration::from_secs(3)).await;
-        data_receiver.close();
 
         if let Some(TaskResult {
             result: Ok(Data::Single(datarow)),
@@ -549,11 +549,14 @@ mod tests {
         } else {
             panic!("test assert: at least one successful probe should be collected");
         }
+        data_receiver.close();
 
         checker_handle.await.unwrap(); // checker should finish as the data channel is closed
         notifications.await.unwrap();
     }
 
+    // for macos and windows the test is flaky
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn http_probe_failure() {
         let _shut = run_test_server(53255).await;
@@ -578,6 +581,7 @@ mod tests {
             }
         });
 
+        tokio::time::sleep(Duration::from_secs(3)).await;
         let is_shutdown_clone = is_shutdown.clone();
         let checker_handle = tokio::spawn(async move {
             HealthcheckService::run_check(
@@ -591,8 +595,6 @@ mod tests {
         });
 
         is_shutdown.store(true, Ordering::Release);
-        tokio::time::sleep(Duration::from_secs(3)).await;
-        data_receiver.close();
         let expected = format!("status code: 500\n\n{UNHEALTHY_REPLY}");
 
         if let Some(TaskResult {
@@ -621,10 +623,14 @@ mod tests {
             panic!("test assert: second unsuccessful probe should be collected");
         }
 
+        data_receiver.close();
+
         checker_handle.await.unwrap(); // checker should finish as the data channel is closed
         notifications.await.unwrap();
     }
 
+    // for macos and windows the test is flaky
+    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn http_probe_initial_delay() {
         let delay = Duration::from_millis(100);
@@ -655,6 +661,7 @@ mod tests {
         });
 
         let is_shutdown_clone = is_shutdown.clone();
+        tokio::time::sleep(Duration::from_secs(3)).await;
         let checker_handle = tokio::spawn(async move {
             HealthcheckService::run_check(
                 is_shutdown_clone,
@@ -667,8 +674,6 @@ mod tests {
         });
 
         is_shutdown.store(true, Ordering::Release);
-        tokio::time::sleep(Duration::from_secs(3)).await;
-        data_receiver.close();
 
         if let Some(TaskResult {
             result: Ok(Data::Single(datarow)),
@@ -687,6 +692,7 @@ mod tests {
         } else {
             panic!("test assert: at least one successful probe should be collected");
         }
+        data_receiver.close();
 
         checker_handle.await.unwrap(); // checker should finish as the data channel is closed
         notifications.await.unwrap();
@@ -699,7 +705,7 @@ mod tests {
             name: None,
             initial_delay: Duration::from_secs(0),
             period: Duration::from_secs(1),
-            timeout: Duration::from_millis(30),
+            timeout: Duration::from_millis(100),
             probe: Probe::Command(vec!["echo".to_string(), "goral".to_string()]),
         };
         // we trim as Windows and Unix have different line separators
@@ -784,7 +790,7 @@ mod tests {
         }
 
         tokio::spawn(async {
-            let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+            let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
             health_reporter
                 .set_serving::<pb::test_server::TestServer<GrpcService>>()

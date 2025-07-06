@@ -127,7 +127,7 @@ impl FromStr for LivenessType {
             _ if s.eq_ignore_ascii_case("tcp") => Self::Tcp,
             _ if s.eq_ignore_ascii_case("command") => Self::Command,
             _ if s.eq_ignore_ascii_case("grpc") => Self::Grpc,
-            _ => return Err(format!("unsupported liveness type: {}", s)),
+            _ => return Err(format!("unsupported liveness type: {s}")),
         };
         Ok(t)
     }
@@ -141,7 +141,7 @@ impl Display for LivenessType {
             Self::Command => "command",
             Self::Grpc => "grpc",
         };
-        write!(f, "{}", t)
+        write!(f, "{t}")
     }
 }
 

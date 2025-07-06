@@ -1,3 +1,7 @@
+* 0.1.14
+    * exponential backoff for rules as well
+    * upgrade all dependencies
+
 * 0.1.13
     * sheets storage refactoring
     * bugfix of the truncation algorithm

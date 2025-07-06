@@ -114,8 +114,7 @@ fn process_rules(
                                 match output_tx.try_send(triggered) {
                                     Err(TrySendError::Full(triggered)) => {
                                         let msg = format!(
-                                            "rules output messages queue is full for service {}",
-                                            service_name
+                                            "rules output messages queue is full for service {service_name}"
                                         );
                                         tracing::error!(
                                             "{}. Cannot send rules application output: {:#?}",
@@ -129,8 +128,7 @@ fn process_rules(
                                             return;
                                         }
                                         let msg = format!(
-                                            "rules output messages queue has been unexpectedly closed for service {}",
-                                            service_name
+                                            "rules output messages queue has been unexpectedly closed for service {service_name}"
                                         );
                                         tracing::error!(
                                             "{}: cannot send rules application output: {:#?}",
@@ -201,8 +199,7 @@ async fn messenger_queue(
                 service
             );
             send_notification.try_error(format!(
-                "{}. Sending via configured messenger failed.",
-                message
+                "{message}. Sending via configured messenger failed."
             ));
         }
     }
@@ -548,6 +545,10 @@ pub trait Service: Send + Sync {
                     return;
                 },
                 _ = push_interval.tick() => {
+                    let rows_count = log.new_rows();
+                    if rows_count == 0 {
+                        continue;
+                    }
                     let example_rules = self.get_example_rules();
                     example_rules.into_iter().for_each(|mut r| log.plan_to_append(&mut r));
                     let rows_count = log.new_rows();

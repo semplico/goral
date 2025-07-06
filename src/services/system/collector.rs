@@ -351,19 +351,19 @@ pub(super) fn collect(
         .flat_map(|(interface_name, data)| {
             [
                 (
-                    format!("{}_total_received", interface_name),
+                    format!("{interface_name}_total_received"),
                     Datavalue::Size(data.total_received()),
                 ),
                 (
-                    format!("{}_new_received", interface_name),
+                    format!("{interface_name}_new_received"),
                     Datavalue::Size(data.received()),
                 ),
                 (
-                    format!("{}_total_transmitted", interface_name),
+                    format!("{interface_name}_total_transmitted"),
                     Datavalue::Size(data.total_transmitted()),
                 ),
                 (
-                    format!("{}_new_transmitted", interface_name),
+                    format!("{interface_name}_new_transmitted"),
                     Datavalue::Size(data.transmitted()),
                 ),
             ]
