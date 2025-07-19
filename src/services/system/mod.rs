@@ -659,8 +659,7 @@ mod tests {
         if let Some(Notification { message, level }) = notification.await.unwrap() {
             assert!(
                 message.contains("sysinfo request timeout"),
-                "received notification: {}",
-                message
+                "received notification: {message}",
             );
             assert_eq!(level, Level::ERROR);
         } else {

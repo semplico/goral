@@ -134,7 +134,7 @@ mod tests {
         let config: MessengerConfig =
             build_config(config).expect("should be able to build minimum configuration");
         // We shouldn't output confidential token and full url in logs
-        let printed = format!("{:?}", config);
+        let printed = format!("{config:?}");
         assert!(
             !printed.contains("123"),
             "debug print doesn't contain secret token"

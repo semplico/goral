@@ -447,8 +447,7 @@ mod tests {
         };
         assert!(
             liveness.to_string().contains("check1"),
-            "if name is provided, it should be used for Display: {}",
-            liveness
+            "if name is provided, it should be used for Display: {liveness}",
         );
     }
 
@@ -463,8 +462,7 @@ mod tests {
         };
         assert!(
             liveness.to_string().contains("ls -lha"),
-            "the command itself is be used for Display if no name is provided: {}",
-            liveness
+            "the command itself is be used for Display if no name is provided: {liveness}"
         );
     }
 
@@ -479,8 +477,7 @@ mod tests {
         };
         assert!(
             liveness.to_string().contains("127.0.0.1:53258"),
-            "the tcp sock addr is be used for Display if no name is provided: {}",
-            liveness
+            "the tcp sock addr is be used for Display if no name is provided: {liveness}",
         );
     }
 
@@ -798,7 +795,7 @@ mod tests {
             let addr = "[::1]:53258".parse().unwrap();
             let service = GrpcService::default();
 
-            println!("HealthServer + TestServer listening on {}", addr);
+            println!("HealthServer + TestServer listening on {addr}");
 
             Server::builder()
                 .add_service(health_service)

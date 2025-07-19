@@ -877,8 +877,7 @@ mod tests {
             assert_eq!(
                 all_sheets.len(),
                 3,
-                "`log_name1`, `log_name2`, `{}` sheets have been created",
-                RULES_LOG_NAME
+                "`log_name1`, `log_name2`, `{RULES_LOG_NAME}` sheets have been created",
             );
 
             for sheet in all_sheets.iter() {
@@ -892,8 +891,7 @@ mod tests {
                     assert_eq!(
                         sheet.rows_count(),
                         2,
-                        "`{}` contains header row and 1 row of data",
-                        RULES_LOG_NAME
+                        "`{RULES_LOG_NAME}` contains header row and 1 row of data",
                     );
                 }
             }
@@ -943,8 +941,7 @@ mod tests {
                     assert_eq!(
                         sheet.rows_count(),
                         2,
-                        "`{}` contains header row and 1 row of data",
-                        RULES_LOG_NAME
+                        "`{RULES_LOG_NAME}` contains header row and 1 row of data",
                     );
                     assert_eq!(sheet.used_rows(), 2)
                 }

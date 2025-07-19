@@ -287,8 +287,7 @@ pub mod tests {
         // collisions numbers {3, 4, 2}
         let share = 100.0 * num_of_collisions as f64 / total as f64;
         println!(
-            "num_of_collisions {}, {:.2}%, num_of_duplicates: {}\n{:?}",
-            num_of_collisions, share, num_of_duplicates, collisions
+            "num_of_collisions {num_of_collisions}, {share:.2}%, num_of_duplicates: {num_of_duplicates}\n{collisions:?}"
         );
         assert!(
             share < 0.000001,
