@@ -46,7 +46,7 @@ pub struct Table {
     used_columns: u32,         // actually used rows, even empty ones
     rows_count: u32,           // rows count by goral service without rows_to_add
     rows_to_add: Vec<RowData>, // rows to be added
-    rows_to_add_temp: u32,     // count of rows to be added after successfull execution
+    rows_to_add_temp: u32,     // count of rows to be added after successful execution
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     host: String,
