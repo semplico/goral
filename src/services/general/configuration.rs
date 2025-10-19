@@ -36,7 +36,7 @@ mod tests {
     use url::Url;
 
     #[test]
-    fn minimal_confg() {
+    fn minimal_config() {
         let config = r#"
         service_account_credentials_path = "/path/to/service_account.json"
         messenger.specific.chat_id = "test_chat_id"
@@ -98,7 +98,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "doesn't match messenger implementation")]
-    fn wrong_messenger_confg_wrong_host() {
+    fn wrong_messenger_config_wrong_host() {
         let config = r#"
         service_account_credentials_path = "/path/to/service_account.json"
         messenger.url = "https://api.telegram.org/bot123/sendMessage"

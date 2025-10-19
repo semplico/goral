@@ -64,7 +64,7 @@ mod tests {
     use crate::configuration::tests::build_config;
 
     #[test]
-    fn minimal_confg() {
+    fn minimal_config() {
         let config = r#"
         spreadsheet_id = "123"
         "#;
@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "doesn't match messenger implementation")]
-    fn wrong_messenger_confg_wrong_host() {
+    fn wrong_messenger_config_wrong_host() {
         let config = r#"
         messenger.url = "https://api.telegram.org/bot123/sendMessage"
         spreadsheet_id = "123"

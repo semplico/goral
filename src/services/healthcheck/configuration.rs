@@ -199,7 +199,7 @@ mod tests {
     use crate::configuration::tests::build_config;
 
     #[test]
-    fn minimal_confg() {
+    fn minimal_config() {
         let config = r#"
         spreadsheet_id = "123"
         [[liveness]]

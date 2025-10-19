@@ -210,7 +210,7 @@ pub mod tests {
     }
 
     #[test]
-    fn minimal_confg() {
+    fn minimal_config() {
         let config = r#"
         [general]
         service_account_credentials_path = "/path/to/service_account.json"
@@ -232,7 +232,7 @@ pub mod tests {
 
     #[test]
     #[should_panic(expected = "messenger specific configuration is incorrect")]
-    fn wrong_messenger_confg_no_match() {
+    fn wrong_messenger_config_no_match() {
         let config = r#"
         [general]
         service_account_credentials_path = "/path/to/service_account.json"

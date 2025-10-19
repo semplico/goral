@@ -96,7 +96,7 @@ mod tests {
     use url::Url;
 
     #[test]
-    fn normal_confg() {
+    fn normal_config() {
         let config = r#"
         specific.chat_id = "test_chat_id"
         url = "https://api.telegram.org/bot123/sendMessage"
