@@ -5,18 +5,18 @@ pub mod logs;
 pub mod metrics;
 pub mod system;
 
-use crate::google::datavalue::{Datarow, Datavalue};
 use crate::google::Storage;
+use crate::google::datavalue::{Datarow, Datavalue};
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{Notification, Sender};
 use crate::rules::{Action, Rule, RuleCondition, RuleOutput, Triggered};
 use crate::storage::AppendableLog;
-use crate::{jitter_duration, BoxedMessenger, Shared};
+use crate::{BoxedMessenger, Shared, jitter_duration};
 use async_trait::async_trait;
 use futures::future::try_join_all;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use std::time::Duration;
 use tokio::sync::broadcast;
@@ -135,7 +135,9 @@ fn process_rules(
                                             msg,
                                             triggered
                                         );
-                                        panic!("assert: rules output messages queue shouldn't be closed before shutdown signal");
+                                        panic!(
+                                            "assert: rules output messages queue shouldn't be closed before shutdown signal"
+                                        );
                                     }
                                     _ => {}
                                 }
@@ -332,10 +334,10 @@ pub trait Service: Send + Sync {
     fn plan_to_append(&self, log: &mut AppendableLog, data: &mut Data) {
         match data {
             Data::Empty | Data::Message(_) => {}
-            Data::Single(ref mut datarow) => {
+            Data::Single(datarow) => {
                 log.plan_to_append(datarow);
             }
-            Data::Many(ref mut datarows) => {
+            Data::Many(datarows) => {
                 datarows.iter_mut().for_each(|datarow| {
                     log.plan_to_append(datarow);
                 });
@@ -388,12 +390,12 @@ pub trait Service: Send + Sync {
                     e
                 );
                 tracing::warn!("{}", msg);
-                if let Some(messenger_config) = &self.messenger_config() {
-                    if messenger_config.send_rules_update_error {
-                        self.messenger()
-                            .unwrap_or(self.shared().send_notification.clone())
-                            .try_warn(msg);
-                    }
+                if let Some(messenger_config) = &self.messenger_config()
+                    && messenger_config.send_rules_update_error
+                {
+                    self.messenger()
+                        .unwrap_or(self.shared().send_notification.clone())
+                        .try_warn(msg);
                 }
 
                 return;
@@ -560,10 +562,8 @@ pub trait Service: Send + Sync {
                     if let Err(e) = log.append().await {
                         let msg = format!("`{e}` for service `{}`, failed to append {rows_count} rows", self.name());
                         tracing::error!("{}", msg);
-                        if let Some(messenger_config) = &self.messenger_config() {
-                            if messenger_config.send_google_append_error {
-                                self.messenger().unwrap_or(self.shared().send_notification.clone()).try_error(msg);
-                            }
+                        if let Some(messenger_config) = &self.messenger_config() && messenger_config.send_google_append_error {
+                            self.messenger().unwrap_or(self.shared().send_notification.clone()).try_error(msg);
                         }
                     } else if rows_count > 0 {
                         tracing::info!(
@@ -593,10 +593,10 @@ pub trait Service: Send + Sync {
 mod tests {
     use super::*;
     use crate::configuration::ceiled_division;
-    use crate::google::datavalue::Datavalue;
-    use crate::google::spreadsheet::tests::TestState;
-    use crate::google::spreadsheet::SpreadsheetAPI;
     use crate::google::Storage;
+    use crate::google::datavalue::Datavalue;
+    use crate::google::spreadsheet::SpreadsheetAPI;
+    use crate::google::spreadsheet::tests::TestState;
     use crate::notifications::Sender;
     use crate::services::general::GENERAL_SERVICE_NAME;
     use crate::tests::TEST_HOST_ID;
@@ -604,8 +604,8 @@ mod tests {
     use chrono::Utc;
 
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     };
     use tokio::sync::{
         broadcast,

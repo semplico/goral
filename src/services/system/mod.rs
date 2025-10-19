@@ -2,19 +2,19 @@ pub mod collector;
 pub mod configuration;
 #[cfg(target_os = "linux")]
 pub mod ssh;
+use crate::Shared;
 use crate::google::datavalue::{Datarow, Datavalue};
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{MessengerApi, Notification, Sender};
 use crate::rules::{Action, Rule, RuleCondition};
-use crate::services::system::configuration::{scrape_push_rule, System};
+use crate::services::system::configuration::{System, scrape_push_rule};
 use crate::services::{Data, Service, TaskResult};
 use crate::storage::AppendableLog;
-use crate::Shared;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -155,7 +155,9 @@ impl SystemService {
                             tracing::info!("exiting system info scraping thread");
                             return;
                         }
-                        panic!("assert: sysinfo messages queue shouldn't be closed before shutdown signal");
+                        panic!(
+                            "assert: sysinfo messages queue shouldn't be closed before shutdown signal"
+                        );
                     }
                 }
             }

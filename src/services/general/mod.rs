@@ -1,14 +1,14 @@
 pub mod configuration;
 
+use crate::Shared;
 use crate::configuration::APP_NAME;
 use crate::http::HttpClient;
-use crate::messenger::configuration::MessengerConfig;
 use crate::messenger::BoxedMessenger;
+use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{Notification, Sender};
-use crate::services::general::configuration::General;
 use crate::services::Service;
+use crate::services::general::configuration::General;
 use crate::storage::AppendableLog;
-use crate::Shared;
 use async_trait::async_trait;
 use serde::Deserialize;
 use std::fmt::Debug;
@@ -178,17 +178,17 @@ impl Service for GeneralService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Shared;
     use crate::configuration::tests::build_config;
-    use crate::google::spreadsheet::tests::TestState;
-    use crate::google::spreadsheet::SpreadsheetAPI;
     use crate::google::Storage;
+    use crate::google::spreadsheet::SpreadsheetAPI;
+    use crate::google::spreadsheet::tests::TestState;
     use crate::messenger::tests::TestMessenger;
     use crate::notifications::Sender;
     use crate::tests::TEST_HOST_ID;
-    use crate::Shared;
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     };
     use tokio::sync::{broadcast, mpsc};
 

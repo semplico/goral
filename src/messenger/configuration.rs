@@ -156,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "missing field `url`")]
+    #[should_panic(expected = "missing configuration field \"url\"")]
     fn url_is_required() {
         let config = r#"
         specific.chat_id = "test_chat_id"

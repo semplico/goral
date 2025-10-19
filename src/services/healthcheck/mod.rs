@@ -1,16 +1,16 @@
 pub mod configuration;
 
+use crate::Shared;
 use crate::configuration::APP_NAME;
 use crate::google::datavalue::{Datarow, Datavalue};
 use crate::http::{HttpClient, Uri};
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{MessengerApi, Notification, Sender};
 use crate::services::healthcheck::configuration::{
-    scrape_push_rule, Healthcheck, Liveness as LivenessConfig, LivenessType,
+    Healthcheck, Liveness as LivenessConfig, LivenessType, scrape_push_rule,
 };
 use crate::services::{Data, Service, TaskResult};
 use crate::storage::AppendableLog;
-use crate::Shared;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
@@ -20,8 +20,8 @@ use std::process::Stdio;
 use std::result::Result as StdResult;
 use std::str::FromStr;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use std::time::{Duration, Instant};
 use tokio::net::TcpSocket;
@@ -30,7 +30,7 @@ use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio::task::JoinHandle;
 use tonic::transport::Endpoint;
 use tonic_health::pb::{
-    health_check_response::ServingStatus, health_client::HealthClient, HealthCheckRequest,
+    HealthCheckRequest, health_check_response::ServingStatus, health_client::HealthClient,
 };
 use tracing::Level;
 
@@ -326,10 +326,17 @@ impl HealthcheckService {
                 format!("Liveness probe for `{liveness:?}` succeeded"),
             )
         } else {
-            (Level::ERROR,
-            format!(
-                "Liveness probe for `{:?}` failed with an output at the [spreadsheet]({}), the sheet may be created a bit later",
-                liveness, log.row_url(datarow.sheet_id(), datarow.row.expect("assert: Datarow row should be set"))))
+            (
+                Level::ERROR,
+                format!(
+                    "Liveness probe for `{:?}` failed with an output at the [spreadsheet]({}), the sheet may be created a bit later",
+                    liveness,
+                    log.row_url(
+                        datarow.sheet_id(),
+                        datarow.row.expect("assert: Datarow row should be set")
+                    )
+                ),
+            )
         };
         if let Some(messenger) = self.messenger() {
             messenger.send_nonblock(Notification::new(message, level));
@@ -431,7 +438,7 @@ impl Service for HealthcheckService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::tests::{run_test_server, HEALTHY_REPLY, UNHEALTHY_REPLY};
+    use crate::http::tests::{HEALTHY_REPLY, UNHEALTHY_REPLY, run_test_server};
     use prost::Message;
     use std::net::TcpListener;
     use tokio::sync::mpsc;
@@ -735,7 +742,7 @@ mod tests {
         server.await.unwrap();
     }
 
-    use tonic::{transport::Server, Request, Response, Status};
+    use tonic::{Request, Response, Status, transport::Server};
 
     #[allow(clippy::derive_partial_eq_without_eq)]
     #[derive(Clone, PartialEq, Message)]

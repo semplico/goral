@@ -1,8 +1,8 @@
 use crate::http::HttpClient;
-use crate::messenger::configuration::MessengerConfig;
 use crate::messenger::Messenger;
-use anyhow::anyhow;
+use crate::messenger::configuration::MessengerConfig;
 use anyhow::Result;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use serde_derive::Serialize;
 

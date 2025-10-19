@@ -9,6 +9,7 @@ use google_sheets4::api::{
     BatchUpdateSpreadsheetRequest, BatchUpdateSpreadsheetResponse, Request, Spreadsheet,
 };
 use google_sheets4::yup_oauth2;
+use google_sheets4::{Error as SheetsError, Result as SheetsResult, hyper};
 #[cfg(not(test))]
 use google_sheets4::{
     api::{
@@ -17,7 +18,6 @@ use google_sheets4::{
     },
     yup_oauth2::authenticator::Authenticator,
 };
-use google_sheets4::{hyper, Error as SheetsError, Result as SheetsResult};
 use serde_json::Value;
 
 #[cfg(test)]
@@ -67,7 +67,10 @@ async fn handle_error<T>(
                 panic!("Fatal error for Google API access: `{e}`");
             }
             SheetsError::MissingToken(_) => {
-                let msg = format!("`MissingToken error` for Google API\nProbably server time skewed which is now `{}`\nSync server time with NTP", Utc::now());
+                let msg = format!(
+                    "`MissingToken error` for Google API\nProbably server time skewed which is now `{}`\nSync server time with NTP",
+                    Utc::now()
+                );
                 tracing::error!("{}{}", e, msg);
                 spreadsheet.send_notification.fatal(msg).await;
                 panic!("{e}Probably server time skewed. Sync server time with NTP.");
@@ -357,7 +360,7 @@ impl SpreadsheetAPI {
 pub mod tests {
     use super::*;
     use crate::google::sheet::tests::mock_sheet_with_properties;
-    use crate::http::{to_body, Body};
+    use crate::http::{Body, to_body};
     use google_sheets4::api::Sheet as GoogleSheet;
     use google_sheets4::api::{
         AddSheetRequest, AppendCellsRequest, BasicFilter, CreateDeveloperMetadataRequest,
@@ -365,7 +368,7 @@ pub mod tests {
         Request, SetBasicFilterRequest, SetDataValidationRequest, UpdateCellsRequest,
         UpdateDeveloperMetadataRequest,
     };
-    use hyper::{header, Response as HyperResponse, StatusCode};
+    use hyper::{Response as HyperResponse, StatusCode, header};
     use std::collections::{HashMap, HashSet};
     use std::time::Duration;
     use tokio::time::sleep;
@@ -775,9 +778,9 @@ pub mod tests {
                                 .expect("assert: goral creates grid sheets with grid_properties");
                             if let Some(row_count) = grid_properties.row_count {
                                 if start_row_index >= row_count {
-                                    return Err(Self::bad_response(
-                                        format!("Cannot delete a row that doesn't exist. Tried to delete row index {start_row_index} but there are only {row_count} rows."),
-                                    ));
+                                    return Err(Self::bad_response(format!(
+                                        "Cannot delete a row that doesn't exist. Tried to delete row index {start_row_index} but there are only {row_count} rows."
+                                    )));
                                 }
                                 if let Some(end_index) = end_index {
                                     grid_properties.row_count =

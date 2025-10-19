@@ -13,19 +13,19 @@ pub mod rules;
 pub mod services;
 pub mod storage;
 use chrono::{DateTime, NaiveDateTime, Utc};
-pub use configuration::{Configuration, APP_NAME};
+pub use configuration::{APP_NAME, Configuration};
 use google::sheet::TabColorRGB;
 pub use google::*;
 use lazy_static::lazy_static;
-pub use messenger::{get_messenger, BoxedMessenger};
+pub use messenger::{BoxedMessenger, get_messenger};
 pub use notifications::*;
 use regex::Regex;
-use services::general::{GeneralService, GENERAL_SERVICE_NAME};
-use services::healthcheck::{HealthcheckService, HEALTHCHECK_SERVICE_NAME};
-use services::kv::{KvService, KV_SERVICE_NAME};
-use services::logs::{LogsService, LOGS_SERVICE_NAME};
-use services::metrics::{MetricsService, METRICS_SERVICE_NAME};
-use services::system::{collector::system_info, SystemService, SYSTEM_SERVICE_NAME};
+use services::general::{GENERAL_SERVICE_NAME, GeneralService};
+use services::healthcheck::{HEALTHCHECK_SERVICE_NAME, HealthcheckService};
+use services::kv::{KV_SERVICE_NAME, KvService};
+use services::logs::{LOGS_SERVICE_NAME, LogsService};
+use services::metrics::{METRICS_SERVICE_NAME, MetricsService};
+use services::system::{SYSTEM_SERVICE_NAME, SystemService, collector::system_info};
 pub use services::*;
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
@@ -258,7 +258,7 @@ pub async fn welcome(
     .expect("assert: should be able to collect basic system info");
     let version = env!("CARGO_PKG_VERSION");
     let msg = format!(
-        "{APP_NAME} `v{version}` has started with [api usage page](https://console.cloud.google.com/apis/dashboard?project={project_id}&show=all) and [api quota page](https://console.cloud.google.com/iam-admin/quotas?project={project_id}) at `{sys}`", 
+        "{APP_NAME} `v{version}` has started with [api usage page](https://console.cloud.google.com/apis/dashboard?project={project_id}&show=all) and [api quota page](https://console.cloud.google.com/iam-admin/quotas?project={project_id}) at `{sys}`",
     );
     send_notification.info(msg).await;
     if let Err(truncation_check) = truncation_check {

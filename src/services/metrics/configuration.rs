@@ -1,6 +1,6 @@
 use crate::configuration::{
-    ceiled_division, host_validation, log_name_opt, port_validation, push_interval_secs,
-    scrape_interval_secs, scrape_timeout_interval_rule, MAX_GOOGLE_REQUEST_DURATION_SECS,
+    MAX_GOOGLE_REQUEST_DURATION_SECS, ceiled_division, host_validation, log_name_opt,
+    port_validation, push_interval_secs, scrape_interval_secs, scrape_timeout_interval_rule,
 };
 use crate::messenger::configuration::MessengerConfig;
 use serde_derive::Deserialize;
@@ -29,15 +29,15 @@ pub(super) fn scrape_push_rule(
     scrape_timeout_ms: &u32,
 ) -> Result<usize, serde_valid::validation::Error> {
     if scrape_interval_secs > push_interval_secs {
-        return Err(serde_valid::validation::Error::Custom(
-            format!("push interval ({push_interval_secs}) shouldn't be greater than scrape interval {scrape_interval_secs}")
-        ));
+        return Err(serde_valid::validation::Error::Custom(format!(
+            "push interval ({push_interval_secs}) shouldn't be greater than scrape interval {scrape_interval_secs}"
+        )));
     }
 
     if *scrape_timeout_ms > u32::from(*scrape_interval_secs) * 1000 / 2 {
-        return Err(serde_valid::validation::Error::Custom(
-            format!("Scrape timeout ({scrape_timeout_ms}ms) shouldn't be greater than half of scrape interval ({scrape_interval_secs}s)")
-        ));
+        return Err(serde_valid::validation::Error::Custom(format!(
+            "Scrape timeout ({scrape_timeout_ms}ms) shouldn't be greater than half of scrape interval ({scrape_interval_secs}s)"
+        )));
     }
 
     // We can wait for the previous request to finish during MAX_GOOGLE_REQUEST_DURATION_SECS
@@ -48,9 +48,9 @@ pub(super) fn scrape_push_rule(
         .expect("assert: number of endpoints is less than u16::MAX");
     const ENDPOINTS_LIMIT: u16 = 4;
     if number_of_metrics_endpoints_in_batch > ENDPOINTS_LIMIT {
-        return Err(serde_valid::validation::Error::Custom(
-            format!("push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) or scrape interval ({scrape_interval_secs}) is too small - too much data ({number_of_metrics_endpoints_in_batch} metrics pages vs limit of {ENDPOINTS_LIMIT}) would be accumulated before saving to a spreadsheet")
-        ));
+        return Err(serde_valid::validation::Error::Custom(format!(
+            "push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) or scrape interval ({scrape_interval_secs}) is too small - too much data ({number_of_metrics_endpoints_in_batch} metrics pages vs limit of {ENDPOINTS_LIMIT}) would be accumulated before saving to a spreadsheet"
+        )));
     }
     // appending to log is time-consuming
     // during the append we accumulate datarows in the channel
@@ -67,9 +67,9 @@ pub(super) fn scrape_push_rule(
     // we truncate output of probe to 1024 bytes - so estimated payload (without other fields) is around 20 KiB
     const ROWS_LIMIT: usize = 40;
     if number_of_queued_rows > ROWS_LIMIT {
-        return Err(serde_valid::validation::Error::Custom(
-            format!("push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) or scrape interval ({scrape_interval_secs}) is too small - too much data (estimated {number_of_queued_rows} rows vs limit of {ROWS_LIMIT}) would be accumulated before saving to a spreadsheet")
-        ));
+        return Err(serde_valid::validation::Error::Custom(format!(
+            "push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) or scrape interval ({scrape_interval_secs}) is too small - too much data (estimated {number_of_queued_rows} rows vs limit of {ROWS_LIMIT}) would be accumulated before saving to a spreadsheet"
+        )));
     }
     Ok(number_of_queued_rows)
 }

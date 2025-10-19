@@ -1,4 +1,4 @@
-use crate::google::{TableId, DEFAULT_FONT};
+use crate::google::{DEFAULT_FONT, TableId};
 use chrono::{DateTime, Utc};
 use google_sheets4::api::{CellData, CellFormat, Color, ColorStyle, ExtendedValue, TextFormat};
 use std::collections::hash_map::DefaultHasher;
@@ -170,7 +170,7 @@ pub(super) fn prepare_sheet_title(
 pub mod tests {
     use super::*;
     use google_sheets4::api::{GridProperties, Sheet as GoogleSheet, SheetProperties};
-    use rand::{distr::Alphanumeric, Rng};
+    use rand::{Rng, distr::Alphanumeric};
     use std::collections::HashMap;
     use std::collections::HashSet;
 

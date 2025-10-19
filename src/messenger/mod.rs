@@ -7,8 +7,8 @@ use crate::messenger::configuration::MessengerConfig;
 use crate::messenger::discord::Discord;
 use crate::messenger::slack::Slack;
 use crate::messenger::telegram::Telegram;
-use anyhow::anyhow;
 use anyhow::Result;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use tracing::Level;
 
@@ -54,8 +54,8 @@ pub fn get_messenger(host: &str) -> Result<BoxedMessenger> {
 pub mod tests {
     use super::*;
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     };
 
     pub struct TestMessenger {

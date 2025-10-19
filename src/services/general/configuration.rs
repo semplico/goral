@@ -73,7 +73,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "missing field `messenger`")]
+    #[should_panic(expected = "missing configuration field \"messenger\"")]
     fn messenger_is_required() {
         let config = r#"
         log_level = "dEbug"

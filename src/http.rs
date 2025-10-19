@@ -1,11 +1,11 @@
 use crate::configuration::APP_NAME;
 use crate::notifications;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use http_body_util::BodyExt;
+pub use hyper::Uri;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-pub use hyper::Uri;
-use hyper::{header, Method, Request, Response, StatusCode};
+use hyper::{Method, Request, Response, StatusCode, header};
 use hyper_rustls::HttpsConnector;
 use hyper_util::client::legacy::Client;
 use serde::Serialize;
@@ -264,8 +264,8 @@ where
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::http::to_body;
     use crate::Sender;
+    use crate::http::to_body;
     use hyper::{Method, Request, Response, StatusCode};
     use tokio::sync::mpsc;
 
@@ -411,6 +411,14 @@ pub mod tests {
         tokio::time::sleep(Duration::from_millis(10)).await; // some time for server to start
 
         let client = HttpClient::lousy(HEALTHY_REPLY.len() - 1, true, Duration::from_millis(10));
-        assert_eq!(client.get_text(Uri::from_static("http://127.0.0.1:53263/health")).await, Err(format!("response body for endpoint http://127.0.0.1:53263/health is greater than limit of {} bytes", HEALTHY_REPLY.len()-1)));
+        assert_eq!(
+            client
+                .get_text(Uri::from_static("http://127.0.0.1:53263/health"))
+                .await,
+            Err(format!(
+                "response body for endpoint http://127.0.0.1:53263/health is greater than limit of {} bytes",
+                HEALTHY_REPLY.len() - 1
+            ))
+        );
     }
 }

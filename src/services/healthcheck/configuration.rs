@@ -1,6 +1,6 @@
 use crate::configuration::{
-    case_insensitive_enum, ceiled_division, host_validation, log_name_opt, port_validation,
-    MAX_GOOGLE_REQUEST_DURATION_SECS,
+    MAX_GOOGLE_REQUEST_DURATION_SECS, case_insensitive_enum, ceiled_division, host_validation,
+    log_name_opt, port_validation,
 };
 use crate::messenger::configuration::MessengerConfig;
 
@@ -68,9 +68,10 @@ pub(super) fn scrape_push_rule(
 ) -> Result<usize, serde_valid::validation::Error> {
     for l in liveness {
         if l.period_secs > *push_interval_secs {
-            return Err(serde_valid::validation::Error::Custom(
-                format!("push interval ({push_interval_secs}) should be greater or equal than liveness period {}", l.period_secs)
-            ));
+            return Err(serde_valid::validation::Error::Custom(format!(
+                "push interval ({push_interval_secs}) should be greater or equal than liveness period {}",
+                l.period_secs
+            )));
         }
 
         if l.period_secs == 0 {
@@ -91,9 +92,9 @@ pub(super) fn scrape_push_rule(
     // we truncate output of probe to 1024 bytes - so estimated payload (without other fields) is around 20 KiB
     const LIMIT: u16 = 15;
     if number_of_rows_in_batch > LIMIT {
-        return Err(serde_valid::validation::Error::Custom(
-            format!("push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) for current choices of liveness periods or liveness periods are too small - too much data ({number_of_rows_in_batch} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet")
-        ));
+        return Err(serde_valid::validation::Error::Custom(format!(
+            "push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) for current choices of liveness periods or liveness periods are too small - too much data ({number_of_rows_in_batch} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet"
+        )));
     }
     Ok(number_of_rows_in_batch.into())
 }

@@ -5,7 +5,7 @@ use crate::google::sheet::TabColorRGB;
 use crate::google::spreadsheet::GOOGLE_SPREADSHEET_MAXIMUM_CELLS;
 use crate::google::{Storage, StorageError, Table, TableId};
 use crate::notifications::Sender;
-use crate::rules::{Rule, RULES_LOG_NAME};
+use crate::rules::{RULES_LOG_NAME, Rule};
 use crate::{get_service_tab_color, jitter_duration};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
@@ -212,7 +212,10 @@ impl AppendableLog {
         if usage < limit {
             if usage > 0.8 * limit && !self.truncate_warning_is_sent {
                 let url = self.base_url();
-                let message = format!("current [spreadsheet]({url}) usage `{usage:.2}%` for service `{}` is approaching a limit `{limit:.2}%`, the data will be truncated, copy it if needed or consider using a separate spreadsheet for this service with a higher [storage quota](https://maksimryndin.github.io/goral/services.html#storage-quota)", self.service);
+                let message = format!(
+                    "current [spreadsheet]({url}) usage `{usage:.2}%` for service `{}` is approaching a limit `{limit:.2}%`, the data will be truncated, copy it if needed or consider using a separate spreadsheet for this service with a higher [storage quota](https://maksimryndin.github.io/goral/services.html#storage-quota)",
+                    self.service
+                );
                 tracing::warn!("{}", message);
                 if let Some(messenger) = self.messenger.as_ref() {
                     messenger.try_warn(message);
@@ -384,7 +387,7 @@ mod tests {
     use super::*;
     use crate::google::datavalue::{Datarow, Datavalue};
     use crate::google::sheet::tests::mock_ordinary_google_sheet;
-    use crate::google::spreadsheet::{tests::TestState, SpreadsheetAPI};
+    use crate::google::spreadsheet::{SpreadsheetAPI, tests::TestState};
     use crate::notifications::{Notification, Sender};
     use crate::services::general::GENERAL_SERVICE_NAME;
     use crate::tests::TEST_HOST_ID;
@@ -507,7 +510,11 @@ mod tests {
             .tables_for_service(&log.spreadsheet_id, GENERAL_SERVICE_NAME)
             .await
             .unwrap();
-        assert_eq!(all_sheets.len(), 4, "`some sheet`, `log_name1` and `log_name2` already exist, `log_name2` with different keys and `log_name3` sheets have been created");
+        assert_eq!(
+            all_sheets.len(),
+            4,
+            "`some sheet`, `log_name1` and `log_name2` already exist, `log_name2` with different keys and `log_name3` sheets have been created"
+        );
 
         assert!(
             all_sheets[0].name().contains("log_name1")
@@ -532,12 +539,20 @@ mod tests {
             all_sheets[2].name().contains("log_name2")
                 || all_sheets[3].name().contains("log_name2")
         );
-        assert_eq!(all_sheets[2].rows_count(), 2, "`log_name2` with different keys and `log_name3` contain header row and one row of data");
+        assert_eq!(
+            all_sheets[2].rows_count(),
+            2,
+            "`log_name2` with different keys and `log_name3` contain header row and one row of data"
+        );
         assert!(
             all_sheets[2].name().contains("log_name3")
                 || all_sheets[3].name().contains("log_name3")
         );
-        assert_eq!(all_sheets[3].rows_count(), 2, "`log_name2` with different keys and `log_name3` contain header row and one row of data");
+        assert_eq!(
+            all_sheets[3].rows_count(),
+            2,
+            "`log_name2` with different keys and `log_name3` contain header row and one row of data"
+        );
 
         assert_eq!(all_sheets[2].service(), GENERAL_SERVICE_NAME);
         assert_eq!(all_sheets[2].host(), TEST_HOST_ID);

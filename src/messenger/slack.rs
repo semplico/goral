@@ -1,8 +1,8 @@
 use crate::http::HttpClient;
-use crate::messenger::configuration::{MessengerConfig, MessengerImplementation};
 use crate::messenger::Messenger;
-use anyhow::anyhow;
+use crate::messenger::configuration::{MessengerConfig, MessengerImplementation};
 use anyhow::Result;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -78,7 +78,7 @@ impl<'a> SlackRequestBody<'a> {
     }
 }
 
-fn process_links(input: &str) -> Cow<str> {
+fn process_links(input: &str) -> Cow<'_, str> {
     lazy_static! {
         static ref LINKS_REGEX: Regex =
             Regex::new(r"\[(?P<title>[^()\[\]]+)\]\((?P<url>[^()\[\]]+)\)").unwrap();

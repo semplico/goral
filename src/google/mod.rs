@@ -1,9 +1,10 @@
 pub mod datavalue;
 pub mod sheet;
 pub mod spreadsheet;
-use crate::rules::{rules_dropdowns, RULES_LOG_NAME};
 use crate::HOST_ID_CHARS_LIMIT;
+use crate::rules::{RULES_LOG_NAME, rules_dropdowns};
 use chrono::{DateTime, Utc};
+use google_sheets4::FieldMask;
 use google_sheets4::api::Sheet as GoogleSheet;
 use google_sheets4::api::{
     AddSheetRequest, AppendCellsRequest, BasicFilter, BooleanCondition, CellData, Color,
@@ -13,15 +14,14 @@ use google_sheets4::api::{
     SetBasicFilterRequest, SetDataValidationRequest, SheetProperties, UpdateCellsRequest,
     UpdateDeveloperMetadataRequest,
 };
-use google_sheets4::FieldMask;
 use serde_json::Value;
+use sheet::{Dropdown, SheetType, TabColorRGB, prepare_sheet_title};
 use sheet::{
-    generate_metadata_id, Header, KEYS_DELIMITER, METADATA_CREATED_AT, METADATA_HOST_ID_KEY,
-    METADATA_KEYS, METADATA_LOG_NAME, METADATA_ROW_COUNT, METADATA_SERVICE_KEY,
-    METADATA_UPDATED_AT,
+    Header, KEYS_DELIMITER, METADATA_CREATED_AT, METADATA_HOST_ID_KEY, METADATA_KEYS,
+    METADATA_LOG_NAME, METADATA_ROW_COUNT, METADATA_SERVICE_KEY, METADATA_UPDATED_AT,
+    generate_metadata_id,
 };
-use sheet::{prepare_sheet_title, Dropdown, SheetType, TabColorRGB};
-pub use spreadsheet::{get_google_auth, SpreadsheetAPI, GOOGLE_SPREADSHEET_MAXIMUM_CELLS};
+pub use spreadsheet::{GOOGLE_SPREADSHEET_MAXIMUM_CELLS, SpreadsheetAPI, get_google_auth};
 use std::collections::HashMap;
 use std::fmt;
 use std::ops::AddAssign;
@@ -506,7 +506,7 @@ impl Table {
 impl AddAssign for Table {
     // merging with another table (new version)
     fn add_assign(&mut self, mut other: Self) {
-        assert!(self == &other, "assert: tables to merge are equal");
+        assert!(self == &other, "assert: tables to merge are the same");
         other.rows_to_add = std::mem::take(&mut self.rows_to_add);
         *self = other;
     }
@@ -712,7 +712,10 @@ impl fmt::Display for StorageError {
         use StorageError::*;
         match self {
             Timeout(duration) => write!(f, "Google API timeout {duration:?}"),
-            RetryTimeout((maximum_backoff, retry, last_retry_error)) => write!(f, "Google API is unavailable ({last_retry_error}): maximum retry duration {maximum_backoff:?} is reached with {retry} retries"),
+            RetryTimeout((maximum_backoff, retry, last_retry_error)) => write!(
+                f,
+                "Google API is unavailable ({last_retry_error}): maximum retry duration {maximum_backoff:?} is reached with {retry} retries"
+            ),
             Retriable(e) | NonRetriable(e) => write!(f, "Google API: {e}"),
         }
     }
