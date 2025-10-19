@@ -1,3 +1,7 @@
+* 0.1.15
+    * bugfix for rows counts assertion
+    * update dependencies
+
 * 0.1.14
     * exponential backoff for rules as well
     * upgrade all dependencies

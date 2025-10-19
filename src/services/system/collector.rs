@@ -339,7 +339,9 @@ pub(super) fn collect(
                 process_to_values(p, &users),
             ));
         } else {
-            let message = format!("process containing `{name}` in its name is not found to collect process statistics");
+            let message = format!(
+                "process containing `{name}` in its name is not found to collect process statistics"
+            );
             tracing::warn!("{}", message);
             messenger.send_nonblock(Notification::new(message, Level::WARN));
         }

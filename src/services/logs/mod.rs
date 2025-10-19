@@ -4,17 +4,17 @@ use crate::google::spreadsheet::GOOGLE_SPREADSHEET_MAXIMUM_CHARS_PER_CELL;
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{MessengerApi, Notification, Sender};
 use crate::rules::{Action, Rule, RuleCondition};
-use crate::services::logs::configuration::{channel_capacity, Logs};
+use crate::services::logs::configuration::{Logs, channel_capacity};
 use crate::services::{Data, Service, TaskResult};
 use crate::storage::AppendableLog;
-use crate::{capture_datetime, Shared};
+use crate::{Shared, capture_datetime};
 use async_trait::async_trait;
 use chrono::{Duration as ChronoDuration, NaiveDateTime, Utc};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use std::time::Duration;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
@@ -399,13 +399,20 @@ mod tests {
             LogsService::guess_log_level("ERROR:the.module.name:The log message"),
             Some("ERROR")
         );
-        assert_eq!(LogsService::guess_log_level("thread 'services::logs::tests::log_level' panicked at src/services/logs/mod.rs:260:9:"), Some("panic"));
+        assert_eq!(
+            LogsService::guess_log_level(
+                "thread 'services::logs::tests::log_level' panicked at src/services/logs/mod.rs:260:9:"
+            ),
+            Some("panic")
+        );
         assert_eq!(
             LogsService::guess_log_level("INFO:2023/02/17 14:30:15 err channel is closed."),
             Some("INFO")
         );
         assert_eq!(
-            LogsService::guess_log_level("[2m2023-11-02T12:11:49.767270Z[0m [32m INFO[0m [2mgoral::storage[0m[2m:[0m appending to log 9 rows for service system"),
+            LogsService::guess_log_level(
+                "[2m2023-11-02T12:11:49.767270Z[0m [32m INFO[0m [2mgoral::storage[0m[2m:[0m appending to log 9 rows for service system"
+            ),
             Some("INFO")
         );
         assert_eq!(

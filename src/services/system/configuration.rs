@@ -1,6 +1,6 @@
 use crate::configuration::{
-    ceiled_division, scrape_interval_secs, scrape_timeout_interval_rule, APP_NAME,
-    MAX_GOOGLE_REQUEST_DURATION_SECS,
+    APP_NAME, MAX_GOOGLE_REQUEST_DURATION_SECS, ceiled_division, scrape_interval_secs,
+    scrape_timeout_interval_rule,
 };
 use crate::messenger::configuration::MessengerConfig;
 
@@ -22,15 +22,15 @@ pub(super) fn scrape_push_rule(
     push_interval_secs: &u16,
 ) -> Result<usize, serde_valid::validation::Error> {
     if scrape_interval_secs > push_interval_secs {
-        return Err(serde_valid::validation::Error::Custom(
-            format!("push interval ({push_interval_secs}) shouldn't be greater than scrape interval {scrape_interval_secs}")
-        ));
+        return Err(serde_valid::validation::Error::Custom(format!(
+            "push interval ({push_interval_secs}) shouldn't be greater than scrape interval {scrape_interval_secs}"
+        )));
     }
 
     if *scrape_timeout_ms > u32::from(*scrape_interval_secs) * 1000 {
-        return Err(serde_valid::validation::Error::Custom(
-            format!("Scrape timeout ({scrape_timeout_ms}ms) shouldn't be greater than scrape interval ({scrape_interval_secs}s)")
-        ));
+        return Err(serde_valid::validation::Error::Custom(format!(
+            "Scrape timeout ({scrape_timeout_ms}ms) shouldn't be greater than scrape interval ({scrape_interval_secs}s)"
+        )));
     }
 
     #[cfg(target_os = "linux")]
@@ -48,9 +48,9 @@ pub(super) fn scrape_push_rule(
         *scrape_interval_secs,
     ) * AVERAGE_DATAROWS_PER_SCRAPE;
     if number_of_rows_in_batch > LIMIT {
-        return Err(serde_valid::validation::Error::Custom(
-            format!("push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) or scrape interval ({scrape_interval_secs}) is too small - too much data ({number_of_rows_in_batch} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet")
-        ));
+        return Err(serde_valid::validation::Error::Custom(format!(
+            "push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) or scrape interval ({scrape_interval_secs}) is too small - too much data ({number_of_rows_in_batch} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet"
+        )));
     }
     // appending to log is time-consuming
     // during the append we accumulate datarows in the channel
@@ -59,9 +59,9 @@ pub(super) fn scrape_push_rule(
     let number_of_queued_rows =
         ceiled_division(append_duration, *scrape_interval_secs) * AVERAGE_DATAROWS_PER_SCRAPE;
     if number_of_queued_rows > LIMIT {
-        return Err(serde_valid::validation::Error::Custom(
-            format!("push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) or scrape interval ({scrape_interval_secs}) is too small - too much data (estimated {number_of_queued_rows} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet")
-        ));
+        return Err(serde_valid::validation::Error::Custom(format!(
+            "push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) or scrape interval ({scrape_interval_secs}) is too small - too much data (estimated {number_of_queued_rows} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet"
+        )));
     }
     Ok(number_of_queued_rows.into())
 }

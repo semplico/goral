@@ -2,7 +2,7 @@ use crate::messenger::configuration::MessengerConfig;
 use crate::services::general::GENERAL_SERVICE_NAME;
 use std::fmt::Debug;
 use std::time::Duration;
-use tokio::sync::mpsc::{self, error::TrySendError, Receiver, Sender as TokioSender};
+use tokio::sync::mpsc::{self, Receiver, Sender as TokioSender, error::TrySendError};
 use tracing::Level;
 
 #[derive(Debug)]

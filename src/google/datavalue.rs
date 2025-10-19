@@ -1,5 +1,5 @@
 use crate::google::sheet::str_to_id;
-use crate::google::{TableId, DEFAULT_FONT, DEFAULT_FONT_TEXT};
+use crate::google::{DEFAULT_FONT, DEFAULT_FONT_TEXT, TableId};
 use crate::rules::RuleApplicant;
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 use google_sheets4::api::{

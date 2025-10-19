@@ -1,9 +1,10 @@
 pub mod datavalue;
 pub mod sheet;
 pub mod spreadsheet;
-use crate::rules::{rules_dropdowns, RULES_LOG_NAME};
 use crate::HOST_ID_CHARS_LIMIT;
+use crate::rules::{RULES_LOG_NAME, rules_dropdowns};
 use chrono::{DateTime, Utc};
+use google_sheets4::FieldMask;
 use google_sheets4::api::Sheet as GoogleSheet;
 use google_sheets4::api::{
     AddSheetRequest, AppendCellsRequest, BasicFilter, BooleanCondition, CellData, Color,
@@ -13,15 +14,14 @@ use google_sheets4::api::{
     SetBasicFilterRequest, SetDataValidationRequest, SheetProperties, UpdateCellsRequest,
     UpdateDeveloperMetadataRequest,
 };
-use google_sheets4::FieldMask;
 use serde_json::Value;
+use sheet::{Dropdown, SheetType, TabColorRGB, prepare_sheet_title};
 use sheet::{
-    generate_metadata_id, Header, KEYS_DELIMITER, METADATA_CREATED_AT, METADATA_HOST_ID_KEY,
-    METADATA_KEYS, METADATA_LOG_NAME, METADATA_ROW_COUNT, METADATA_SERVICE_KEY,
-    METADATA_UPDATED_AT,
+    Header, KEYS_DELIMITER, METADATA_CREATED_AT, METADATA_HOST_ID_KEY, METADATA_KEYS,
+    METADATA_LOG_NAME, METADATA_ROW_COUNT, METADATA_SERVICE_KEY, METADATA_UPDATED_AT,
+    generate_metadata_id,
 };
-use sheet::{prepare_sheet_title, Dropdown, SheetType, TabColorRGB};
-pub use spreadsheet::{get_google_auth, SpreadsheetAPI, GOOGLE_SPREADSHEET_MAXIMUM_CELLS};
+pub use spreadsheet::{GOOGLE_SPREADSHEET_MAXIMUM_CELLS, SpreadsheetAPI, get_google_auth};
 use std::collections::HashMap;
 use std::fmt;
 use std::ops::AddAssign;
@@ -46,7 +46,7 @@ pub struct Table {
     used_columns: u32,         // actually used rows, even empty ones
     rows_count: u32,           // rows count by goral service without rows_to_add
     rows_to_add: Vec<RowData>, // rows to be added
-    rows_to_add_count: u32,    // count of rows to be added
+    rows_to_add_temp: u32,     // count of rows to be added after successful execution
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     host: String,
@@ -69,7 +69,7 @@ impl fmt::Debug for Table {
             .field("used_rows", &self.used_rows)
             .field("used_columns", &self.used_columns)
             .field("rows_count", &self.rows_count)
-            .field("rows_to_add_count", &self.rows_to_add_count)
+            .field("rows_to_add_count", &self.rows_to_add_count())
             .field("to_create", &self.to_create)
             .field("to_cleanup", &self.to_cleanup)
             .finish()
@@ -102,7 +102,7 @@ impl Table {
             rows_to_add: vec![RowData {
                 values: Some(header_values),
             }],
-            rows_to_add_count: 1,
+            rows_to_add_temp: 0,
             created_at: timestamp,
             updated_at: timestamp,
             host: host_id.to_string(),
@@ -127,7 +127,6 @@ impl Table {
                 values: Some(header_values),
             },
         );
-        self.rows_to_add_count += 1;
         self.to_create = true;
         self.used_rows = 0;
         self.used_columns = 0;
@@ -146,21 +145,23 @@ impl Table {
     pub fn plan_to_append(&mut self, mut datarow: datavalue::Datarow) -> u32 {
         datarow.sort_by_keys(&self.columns);
         self.rows_to_add.push(datarow.into());
-        self.rows_to_add_count += 1;
-        self.rows_count + self.rows_to_add_count
+        self.rows_count + self.rows_to_add_count()
     }
 
     // after successful execution
     pub fn post_execution(&mut self) {
-        self.rows_count += self.rows_to_add_count;
-        self.rows_to_add_count = 0; // the new rows have been appended
+        self.rows_count += self.rows_to_add_temp;
+        self.rows_to_add_temp = 0; // the new rows have been appended
         self.to_create = false; // the table has been created
         self.to_cleanup = None; // the table has been cleaned up
         assert!(self.rows_to_add.is_empty());
     }
 
     pub fn rows_to_add_count(&self) -> u32 {
-        self.rows_to_add_count
+        self.rows_to_add
+            .len()
+            .try_into()
+            .expect("assert: rows to add count fits u32")
     }
 
     pub fn id(&self) -> &TableId {
@@ -214,7 +215,7 @@ impl Table {
     }
 
     pub fn rows_to_be_used(&self) -> u32 {
-        self.used_rows + self.rows_to_add_count
+        self.used_rows + self.rows_to_add_count()
     }
 
     pub fn columns_to_be_used(&self) -> u32 {
@@ -236,6 +237,7 @@ impl Table {
 
     pub fn api_requests(&mut self) -> Vec<Request> {
         // take out accumulated rows
+        self.rows_to_add_temp = self.rows_to_add_count();
         let rows_to_add = std::mem::take(&mut self.rows_to_add);
 
         if self.name == RULES_LOG_NAME && !self.to_create {
@@ -245,11 +247,6 @@ impl Table {
             return vec![];
         }
 
-        assert!(
-            rows_to_add.len() == self.rows_to_add_count as usize,
-            "assert: rows to add number and their counter should be equal for the table {}",
-            self.title
-        );
         if let Some(Cleanup::Delete) = self.to_cleanup {
             return vec![Request {
                 delete_sheet: Some(DeleteSheetRequest {
@@ -420,7 +417,7 @@ impl Table {
         } else if self.name != RULES_LOG_NAME {
             // We update only for append case
             // For truncation we don't update to prevent bumping old sheets up
-            let take = if self.rows_to_add_count > 0 {
+            let take = if self.rows_to_add_temp > 0 {
                 self.updated_at = Utc::now();
                 2
             } else {
@@ -454,7 +451,7 @@ impl Table {
                     ..Default::default()
                 })
             }
-            if self.rows_to_add_count > 0 {
+            if self.rows_to_add_temp > 0 {
                 requests.push(Request {
                     append_cells: Some(AppendCellsRequest {
                         fields: Some(
@@ -509,9 +506,8 @@ impl Table {
 impl AddAssign for Table {
     // merging with another table (new version)
     fn add_assign(&mut self, mut other: Self) {
-        assert!(self == &other, "assert: tables to merge are equal");
+        assert!(self == &other, "assert: tables to merge are the same");
         other.rows_to_add = std::mem::take(&mut self.rows_to_add);
-        other.rows_to_add_count = self.rows_to_add_count;
         *self = other;
     }
 }
@@ -616,7 +612,7 @@ impl TryFrom<GoogleSheet> for Table {
                 .expect("assert: column count fits u32"),
             rows_count,
             rows_to_add: vec![],
-            rows_to_add_count: 0,
+            rows_to_add_temp: 0,
             created_at,
             updated_at,
             host,
@@ -716,7 +712,10 @@ impl fmt::Display for StorageError {
         use StorageError::*;
         match self {
             Timeout(duration) => write!(f, "Google API timeout {duration:?}"),
-            RetryTimeout((maximum_backoff, retry, last_retry_error)) => write!(f, "Google API is unavailable ({last_retry_error}): maximum retry duration {maximum_backoff:?} is reached with {retry} retries"),
+            RetryTimeout((maximum_backoff, retry, last_retry_error)) => write!(
+                f,
+                "Google API is unavailable ({last_retry_error}): maximum retry duration {maximum_backoff:?} is reached with {retry} retries"
+            ),
             Retriable(e) | NonRetriable(e) => write!(f, "Google API: {e}"),
         }
     }

@@ -1,13 +1,13 @@
 pub mod configuration;
 
+use crate::Shared;
 use crate::google::datavalue::{Datarow, Datavalue};
 use crate::http::{HttpClient, Uri};
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{MessengerApi, Notification, Sender};
-use crate::services::metrics::configuration::{scrape_push_rule, Metrics};
+use crate::services::metrics::configuration::{Metrics, scrape_push_rule};
 use crate::services::{Data, Service, TaskResult};
 use crate::storage::AppendableLog;
-use crate::Shared;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
@@ -16,8 +16,8 @@ use std::cmp::Ordering as Cmp;
 use std::collections::HashMap;
 use std::result::Result as StdResult;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use std::time::Duration;
 use tokio::sync::mpsc::{self, error::TrySendError};

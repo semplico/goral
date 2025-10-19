@@ -1,4 +1,4 @@
-use crate::google::{TableId, DEFAULT_FONT};
+use crate::google::{DEFAULT_FONT, TableId};
 use chrono::{DateTime, Utc};
 use google_sheets4::api::{CellData, CellFormat, Color, ColorStyle, ExtendedValue, TextFormat};
 use std::collections::hash_map::DefaultHasher;
@@ -170,7 +170,7 @@ pub(super) fn prepare_sheet_title(
 pub mod tests {
     use super::*;
     use google_sheets4::api::{GridProperties, Sheet as GoogleSheet, SheetProperties};
-    use rand::{distr::Alphanumeric, Rng};
+    use rand::{Rng, distr::Alphanumeric};
     use std::collections::HashMap;
     use std::collections::HashSet;
 
@@ -287,8 +287,7 @@ pub mod tests {
         // collisions numbers {3, 4, 2}
         let share = 100.0 * num_of_collisions as f64 / total as f64;
         println!(
-            "num_of_collisions {}, {:.2}%, num_of_duplicates: {}\n{:?}",
-            num_of_collisions, share, num_of_duplicates, collisions
+            "num_of_collisions {num_of_collisions}, {share:.2}%, num_of_duplicates: {num_of_duplicates}\n{collisions:?}"
         );
         assert!(
             share < 0.000001,

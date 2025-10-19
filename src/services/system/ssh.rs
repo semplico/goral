@@ -8,8 +8,8 @@ use regex::{Regex, RegexBuilder};
 use std::collections::HashMap;
 use std::process::Command;
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use tokio::sync::mpsc;
 use tokio::sync::oneshot::Sender as TokioSender;

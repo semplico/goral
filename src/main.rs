@@ -1,10 +1,10 @@
 use clap::Parser;
 use futures::future::try_join_all;
-use goral::configuration::{Configuration, APP_NAME};
-use goral::google::{get_google_auth, SpreadsheetAPI, Storage};
+use goral::configuration::{APP_NAME, Configuration};
+use goral::google::{SpreadsheetAPI, Storage, get_google_auth};
 use goral::storage::AppendableLog;
 use goral::{
-    collect_messengers, collect_services, setup_general_messenger_channel, welcome, Shared,
+    Shared, collect_messengers, collect_services, setup_general_messenger_channel, welcome,
 };
 use std::fmt::Debug;
 use std::panic;
@@ -199,7 +199,9 @@ async fn start() -> Result<(), String> {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), String> {
     panic::set_hook(Box::new(|panic_info| {
-        let base_message = format!("\nCould you please open an issue https://github.com/maksimryndin/goral/issues with `Bug` label? Thank you for using {APP_NAME}!");
+        let base_message = format!(
+            "\nCould you please open an issue https://github.com/maksimryndin/goral/issues with `Bug` label? Thank you for using {APP_NAME}!"
+        );
         if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
             if s.starts_with("assert:") {
                 println!(

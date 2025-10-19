@@ -1,27 +1,27 @@
 pub mod configuration;
-use crate::google::datavalue::{Datarow, Datavalue};
 use crate::google::StorageError;
-use crate::http::{run_server, to_body, Body};
+use crate::google::datavalue::{Datarow, Datavalue};
+use crate::http::{Body, run_server, to_body};
 use crate::messenger::configuration::MessengerConfig;
 use crate::notifications::{MessengerApi, Notification, Sender};
 use crate::rules::RULES_LOG_NAME;
 use crate::services::kv::configuration::Kv;
-use crate::services::{messenger_queue, rules_notifications, Data, Service};
+use crate::services::{Data, Service, messenger_queue, rules_notifications};
 use crate::storage::AppendableLog;
-use crate::{capture_datetime, Shared};
+use crate::{Shared, capture_datetime};
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use futures::future::try_join_all;
 use http_body_util::BodyExt;
 use hyper::{
-    body::Buf, header, Method, Request as HyperRequest, Response as HyperResponse, StatusCode,
+    Method, Request as HyperRequest, Response as HyperResponse, StatusCode, body::Buf, header,
 };
-use serde::{de::Deserializer, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Deserializer};
 use serde_valid::Validate;
 use std::collections::HashSet;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::{self};
@@ -213,7 +213,9 @@ impl KvService {
                         "kv service data messages queue has been unexpectedly closed".to_string();
                     tracing::error!("{}: {}", msg, e);
                     send_notification.fatal(msg).await;
-                    panic!("assert: kv service data messages queue shouldn't be closed before shutdown signal");
+                    panic!(
+                        "assert: kv service data messages queue shouldn't be closed before shutdown signal"
+                    );
                 }
 
                 match rx.await {
@@ -423,14 +425,14 @@ impl Service for KvService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Shared;
     use crate::configuration::tests::build_config;
-    use crate::google::spreadsheet::tests::TestState;
-    use crate::google::spreadsheet::SpreadsheetAPI;
     use crate::google::Storage;
+    use crate::google::spreadsheet::SpreadsheetAPI;
+    use crate::google::spreadsheet::tests::TestState;
     use crate::http::{HttpClient, Uri};
     use crate::notifications::Sender;
     use crate::tests::TEST_HOST_ID;
-    use crate::Shared;
     use serde_json::json;
     use std::sync::Arc;
     use tokio::sync::{broadcast, mpsc};

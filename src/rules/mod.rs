@@ -1,5 +1,5 @@
 use crate::google::datavalue::{Datarow, Datavalue, NOT_AVAILABLE};
-use crate::google::{sheet::Dropdown, TableId};
+use crate::google::{TableId, sheet::Dropdown};
 use crate::notifications::{Notification, Sender};
 use chrono::Utc;
 use serde_json::Value;
@@ -215,7 +215,10 @@ impl Rule {
                 Datavalue::Text(value.as_str()?.to_string())
             }
             RuleCondition::Is | RuleCondition::IsNot if value.is_number() => {
-                let message = format!("`{IS_CONDITION}` and `{IS_NOT_CONDITION}` conditions are not valid when the `{RULE_VALUE_COLUMN_HEADER}` is a float, the rule for `{log_name}->{key}` with `{RULE_VALUE_COLUMN_HEADER}` `{}` is skipped", value.as_f64()?);
+                let message = format!(
+                    "`{IS_CONDITION}` and `{IS_NOT_CONDITION}` conditions are not valid when the `{RULE_VALUE_COLUMN_HEADER}` is a float, the rule for `{log_name}->{key}` with `{RULE_VALUE_COLUMN_HEADER}` `{}` is skipped",
+                    value.as_f64()?
+                );
                 tracing::warn!("{}", message);
                 if let Some(messenger) = messenger {
                     messenger.send_nonblock(Notification::new(message, Level::WARN));
