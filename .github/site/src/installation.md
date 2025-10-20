@@ -73,7 +73,7 @@ spreadsheet_id = "<spreadsheet_id_4>"
 messenger.url = "https://discord.com/api/webhooks/101010101/xxxxx-XXXXX"
 autotruncate_at_usage_percent = 90
 mounts = ["/", "/var"]
-names = ["goral", "mybackend"]
+process_names = ["goral", "mybackend"]
 ```
 
 See also [Services](./services.md) and [Recommended deployment](./recommended-deployment.md).
