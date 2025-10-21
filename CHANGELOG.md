@@ -1,3 +1,6 @@
+* 0.1.16
+    * ssh access log - RFC3339 support
+
 * 0.1.15
     * bugfix for rows counts assertion
     * update dependencies

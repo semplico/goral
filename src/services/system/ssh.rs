@@ -159,7 +159,9 @@ fn parse(line: &str) -> Option<Datarow> {
         static ref RE: Regex = Regex::new(
             r"(?x)
             (?P<datetime>
-                [A-Z][a-z]{2}(\s\d{2}|\s{2}\d)\s\d{2}:\d{2}:\d{2}
+                [A-Z][a-z]{2}(\s\d{2}|\s{2}\d)\s\d{2}:\d{2}:\d{2}|
+                \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}[+-]\d{2}:\d{2}|
+                \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}
             )
             \s\S+\s
             sshd\[(?P<id>\d+)\]:\s
@@ -183,9 +185,12 @@ fn parse(line: &str) -> Option<Datarow> {
             .name("datetime")
             .map(|datetime| {
                 let captured = datetime.as_str();
-                let captured = format!("{} {captured}", Utc::now().format("%Y"));
-                NaiveDateTime::parse_from_str(&captured, "%Y %b %e %H:%M:%S")
-                    .expect("assert: can parse auth log datetime")
+                NaiveDateTime::parse_from_str(
+                    &format!("{} {captured}", Utc::now().format("%Y")),
+                    "%Y %b %e %H:%M:%S",
+                )
+                .or_else(|_| DateTime::parse_from_rfc3339(captured).map(|d| d.naive_utc()))
+                .expect("assert: can parse auth log datetime {captured}")
             })
             .expect("assert: can get auth log datetime");
         let id = cap.name("id").and_then(|d| d.as_str().parse().ok())?;
@@ -566,6 +571,38 @@ mod tests {
         assert_eq!(
             parsed.data[4].1,
             Datavalue::Text("invalid_user".to_string())
+        );
+        assert_eq!(parsed.data[5].1, Datavalue::NotAvailable);
+
+        let line = "2025-10-21T08:05:31.176969+00:00 semplico-server-c795f46 sshd[242284]: Accepted publickey for root from 77.222.25.29 port 59050 ssh2: ED25519 SHA256:OeFsSeh484Hnri+kscKghIZiDrVupwoM/tfjrD5vmcY";
+        let parsed = parse(line).unwrap();
+        assert_eq!(parsed.data[0].1, Datavalue::IntegerID(242284));
+        assert_eq!(parsed.data[1].1, Datavalue::Text("root".to_string()));
+        assert_eq!(
+            parsed.data[2].1,
+            Datavalue::Text("77.222.25.29".to_string())
+        );
+        assert_eq!(parsed.data[3].1, Datavalue::IntegerID(59050));
+        assert_eq!(parsed.data[4].1, Datavalue::Text("connected".to_string()));
+        assert_eq!(
+            parsed.data[5].1,
+            Datavalue::Text(
+                "ED25519 SHA256:OeFsSeh484Hnri+kscKghIZiDrVupwoM/tfjrD5vmcY".to_string()
+            )
+        );
+
+        let line = "2025-10-21T07:53:37.850900+00:00 semplico-server-c795f46 sshd[240282]: banner exchange: Connection from 64.62.156.142 port 18436: invalid format";
+        let parsed = parse(line).unwrap();
+        assert_eq!(parsed.data[0].1, Datavalue::IntegerID(240282));
+        assert_eq!(parsed.data[1].1, Datavalue::NotAvailable);
+        assert_eq!(
+            parsed.data[2].1,
+            Datavalue::Text("64.62.156.142".to_string())
+        );
+        assert_eq!(parsed.data[3].1, Datavalue::IntegerID(18436));
+        assert_eq!(
+            parsed.data[4].1,
+            Datavalue::Text("wrong_params".to_string())
         );
         assert_eq!(parsed.data[5].1, Datavalue::NotAvailable);
     }
