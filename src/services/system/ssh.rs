@@ -574,7 +574,7 @@ mod tests {
         );
         assert_eq!(parsed.data[5].1, Datavalue::NotAvailable);
 
-        let line = "2025-10-21T08:05:31.176969+00:00 semplico-server-c795f46 sshd[242284]: Accepted publickey for root from 77.222.25.29 port 59050 ssh2: ED25519 SHA256:OeFsSeh484Hnri+kscKghIZiDrVupwoM/tfjrD5vmcY";
+        let line = "2025-10-21T08:05:31.176969+00:00 semplico-server-c795f46 sshd[242284]: Accepted publickey for root from 77.222.25.29 port 59050 ssh2: ED25519 SHA256:OeFsShe484Hnri+kscKghIZiDrVupwoM/tfjrD5vmcY";
         let parsed = parse(line).unwrap();
         assert_eq!(parsed.data[0].1, Datavalue::IntegerID(242284));
         assert_eq!(parsed.data[1].1, Datavalue::Text("root".to_string()));
@@ -587,7 +587,7 @@ mod tests {
         assert_eq!(
             parsed.data[5].1,
             Datavalue::Text(
-                "ED25519 SHA256:OeFsSeh484Hnri+kscKghIZiDrVupwoM/tfjrD5vmcY".to_string()
+                "ED25519 SHA256:OeFsShe484Hnri+kscKghIZiDrVupwoM/tfjrD5vmcY".to_string()
             )
         );
 
