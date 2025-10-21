@@ -11,9 +11,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://maksimryndin.github.io/goral/downlo
 </summary>
 
 ```sh
-wget https://github.com/maksimryndin/goral/releases/download/0.1.15/goral-0.1.15-x86_64-unknown-linux-gnu.tar.gz
-tar -xzf goral-0.1.15-x86_64-unknown-linux-gnu.tar.gz
-cd goral-0.1.15-x86_64-unknown-linux-gnu/
+wget https://github.com/maksimryndin/goral/releases/download/0.1.16/goral-0.1.16-x86_64-unknown-linux-gnu.tar.gz
+tar -xzf goral-0.1.16-x86_64-unknown-linux-gnu.tar.gz
+cd goral-0.1.16-x86_64-unknown-linux-gnu/
 shasum -a 256 -c sha256_checksum.txt 
 ```
 </details>
@@ -23,7 +23,7 @@ shasum -a 256 -c sha256_checksum.txt
 
 ```sh
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-git clone --depth 1 --branch 0.1.15 https://github.com/maksimryndin/goral
+git clone --depth 1 --branch 0.1.16 https://github.com/maksimryndin/goral
 cd goral
 RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target <target triple>
 ```
@@ -74,6 +74,10 @@ messenger.url = "https://discord.com/api/webhooks/101010101/xxxxx-XXXXX"
 autotruncate_at_usage_percent = 90
 mounts = ["/", "/var"]
 process_names = ["goral", "mybackend"]
+
+[kv]
+spreadsheet_id = "<spreadsheet_id_5>"
+port = 50000
 ```
 
 See also [Services](./services.md) and [Recommended deployment](./recommended-deployment.md).
