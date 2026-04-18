@@ -173,7 +173,7 @@ impl Configuration {
             }
         }
         if !message.is_empty() {
-            write!(&mut message, " there is a risk to hit a storage quota for Google sheets, [docs](https://maksimryndin.github.io/goral/services.html#storage-quota)").expect("assert: can write to string");
+            write!(&mut message, " there is a risk to hit a storage quota for Google sheets, [docs](https://semplico.github.io/goral/services.html#storage-quota)").expect("assert: can write to string");
             Err(message)
         } else {
             Ok(())

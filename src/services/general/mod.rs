@@ -27,7 +27,7 @@ struct GithubRelease {
 }
 
 async fn latest_release() -> Result<GithubRelease, Box<dyn std::error::Error + Send + Sync>> {
-    let url = "https://api.github.com/repos/maksimryndin/goral/releases/latest"
+    let url = "https://api.github.com/repos/semplico/goral/releases/latest"
         .parse()
         .expect("assert: latest release url is correct");
     let client = HttpClient::strict(32768, true);
@@ -48,8 +48,8 @@ async fn release_check(send_notification: Sender) {
                         if !release.prerelease && current != latest {
                             let msg = format!(
                                 "Your `{APP_NAME}` version `{current}` is not the latest `{latest}`, \
-                                 consider [upgrading](https://github.com/maksimryndin/goral/releases); \
-                                 if you like `{APP_NAME}`, consider giving a star to the [repo](https://github.com/maksimryndin/goral); \
+                                 consider [upgrading](https://github.com/semplico/goral/releases); \
+                                 if you like `{APP_NAME}`, consider giving a star to the [repo](https://github.com/semplico/goral); \
                                  thank you😊"
                             );
                             send_notification.info(msg).await;

@@ -1010,7 +1010,7 @@ checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
 [[package]]
 name = "logwatcher2"
 version = "0.2.1"
-source = "git+https://github.com/maksimryndin/logwatcher2.git?rev=9124084dedf7cca548a7be01f0195b876683749a#9124084dedf7cca548a7be01f0195b876683749a"
+source = "git+https://github.com/semplico/logwatcher2.git?rev=9124084dedf7cca548a7be01f0195b876683749a#9124084dedf7cca548a7be01f0195b876683749a"
 
 [[package]]
 name = "matchers"

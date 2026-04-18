@@ -25,7 +25,7 @@ main() {
     assert_nz "$_arch" "arch"
 
     local _file="goral-${_version}-${_arch}"
-    local _url="https://github.com/maksimryndin/goral/releases/download/${_version}/${_file}.tar.gz"
+    local _url="https://github.com/semplico/goral/releases/download/${_version}/${_file}.tar.gz"
 
     local _dir
     if ! _dir="$(ensure mktemp -d)"; then

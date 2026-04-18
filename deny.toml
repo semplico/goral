@@ -62,7 +62,7 @@ highlight = "all"
 unknown-registry = "warn"
 unknown-git = "warn"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = ["https://github.com/maksimryndin/logwatcher2.git"]
+allow-git = ["https://github.com/semplico/logwatcher2.git"]
 
 [sources.allow-org]
 github = []

@@ -53,7 +53,7 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["f
 url = { version = "2", default-features = false, features = ["serde"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-logwatcher2 = { git = "https://github.com/maksimryndin/logwatcher2.git", rev="9124084dedf7cca548a7be01f0195b876683749a" }
+logwatcher2 = { git = "https://github.com/semplico/logwatcher2.git", rev="9124084dedf7cca548a7be01f0195b876683749a" }
 psutil = { version = "5.3.0", default-features = false, features = ["disk"]}
 
 [dev-dependencies]
