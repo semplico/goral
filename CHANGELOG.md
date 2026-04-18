@@ -1,3 +1,6 @@
+* 0.1.17
+    * transfer the repository to @semplico github org
+
 * 0.1.16
     * ssh access log - RFC3339 support
 
@@ -82,4 +85,4 @@
     * binary size is reduced (by stripping debug info)
 
 * 0.1.0
-    * first public release 
+    * first public release

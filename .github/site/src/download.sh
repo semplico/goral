@@ -21,7 +21,7 @@ main() {
 
     get_architecture || return 1
     local _arch="$RETVAL"
-    local _version=${1:-'0.1.16'}
+    local _version=${1:-'0.1.17'}
     assert_nz "$_arch" "arch"
 
     local _file="goral-${_version}-${_arch}"
@@ -62,11 +62,11 @@ main() {
         printf "\33[1minfo:\33[0m checking SHA256 hash of the binary.\n" 1>&2
     else
         printf '%s\n' 'info: checking SHA256 hash of the binary.' 1>&2
-    fi 
+    fi
     shasum -a 256 -c "${_file}/sha256_checksum.txt"
     mv "${_file}/goral" $_cwd
     cd $_cwd
-    
+
     ignore rm -r "$_dir"
 
     if $_ansi_escapes_are_valid; then
