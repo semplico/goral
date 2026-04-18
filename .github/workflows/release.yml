@@ -223,7 +223,7 @@ jobs:
           fi
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: ./artifacts
           merge-multiple: true
@@ -239,13 +239,22 @@ jobs:
             echo -E 'To update `curl --proto '=https' --tlsv1.2 -sSf https://semplico.github.io/goral/download.sh | sh`' >> ${{ env.VERSION }}-CHANGELOG.txt
           fi
 
-      - name: Release
+      - name: Create Draft Release and Upload Assets
         uses: softprops/action-gh-release@v3
         with:
           body_path: ${{ env.VERSION }}-CHANGELOG.txt
           prerelease: ${{ env.PRERELEASE }}
-          make_latest: "true"
-          draft: false
           tag_name: ${{ env.VERSION }}
+          # Step 1: Keep as draft to allow asset uploads on immutable repo
+          draft: true
           files: |
             ./artifacts/*
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.VERSION }}
+          # Step 2: Flip the switch to publish
+          draft: false
+          prerelease: ${{ env.PRERELEASE }}
+          make_latest: ${{ env.PRERELEASE == 'false' }}
