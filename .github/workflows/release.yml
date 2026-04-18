@@ -246,6 +246,6 @@ jobs:
           prerelease: ${{ env.PRERELEASE == 'true' }}
           tag_name: ${{ env.VERSION }}
           make_latest: ${{ env.PRERELEASE == 'false' }}
-          draft: false
+          draft: true
           files: |
             ./artifacts/*
