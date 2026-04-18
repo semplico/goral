@@ -243,18 +243,9 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           body_path: ${{ env.VERSION }}-CHANGELOG.txt
-          prerelease: ${{ env.PRERELEASE }}
+          prerelease: ${{ env.PRERELEASE == 'true' }}
           tag_name: ${{ env.VERSION }}
-          # Step 1: Keep as draft to allow asset uploads on immutable repo
-          draft: true
+          make_latest: ${{ env.PRERELEASE == 'false' }}
+          draft: false
           files: |
             ./artifacts/*
-
-      - name: Publish Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ env.VERSION }}
-          # Step 2: Flip the switch to publish
-          draft: false
-          prerelease: ${{ env.PRERELEASE }}
-          make_latest: ${{ env.PRERELEASE == 'false' }}
