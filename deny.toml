@@ -20,6 +20,7 @@ yanked = "deny"
 ignore = [
     "RUSTSEC-2024-0436", # paste is no longer maintained
     "RUSTSEC-2025-0066", # google-apis-common is no longer maintained
+    "RUSTSEC-2025-0134", # rustls-pemfile is no longer maintained
 ]
 
 [licenses]
@@ -62,7 +63,7 @@ highlight = "all"
 unknown-registry = "warn"
 unknown-git = "warn"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = ["https://github.com/maksimryndin/logwatcher2.git"]
+allow-git = ["https://github.com/semplico/logwatcher2.git"]
 
 [sources.allow-org]
 github = []

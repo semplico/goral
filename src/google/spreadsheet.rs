@@ -99,7 +99,7 @@ async fn handle_error<T>(
                     _ => {
                         let text = format!("bad request: {v}");
                         if text.contains("This action would increase the number of cells in the workbook above the limit of 10000000 cells") {
-                            Err(StorageError::NonRetriable("The associated spreadsheet is full: either your services have incorrect [truncation limits](https://maksimryndin.github.io/goral/services.html#storage-quota) or you have other data in the spreadsheet. Until the spreadsheet is truncated manually, no new rows can be appended, no new rules updates will work.".to_string()))
+                            Err(StorageError::NonRetriable("The associated spreadsheet is full: either your services have incorrect [truncation limits](https://semplico.github.io/goral/services.html#storage-quota) or you have other data in the spreadsheet. Until the spreadsheet is truncated manually, no new rows can be appended, no new rules updates will work.".to_string()))
                         } else {
                             Err(StorageError::NonRetriable(text))
                         }

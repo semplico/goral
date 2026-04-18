@@ -7,7 +7,7 @@ on:
       tags:
         # Regex for a prerelease such as 0.1.1rc1
         - '[0-9]+.[0-9]+.[0-9]+rc[0-9]+'
-      
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
@@ -29,7 +29,7 @@ jobs:
 
           TAG_NAME=${GITHUB_REF#refs/tags/}
           PACKAGE_VERSION=$(awk -F '"' '/^version =/ {print $2}' Cargo.toml)
-          
+
           if echo "$TAG_NAME" | grep -q "rc"; then
             echo "VERSION=$TAG_NAME" >> $GITHUB_ENV
             echo "PRERELEASE=true" >> $GITHUB_ENV
@@ -37,8 +37,8 @@ jobs:
             echo "VERSION=${PACKAGE_VERSION}" >> $GITHUB_ENV
             echo "PRERELEASE=false" >> $GITHUB_ENV
           else
-            echo "no release version tag is found" 
-            exit 1 
+            echo "no release version tag is found"
+            exit 1
           fi
 
       - name: Check release version
@@ -51,27 +51,27 @@ jobs:
           fi
 
           grep -q ${{ env.VERSION }} .github/ISSUE_TEMPLATE/BUG_REPORT.yaml
-          if [ $? -ne 0 ]; then 
-            echo "BUG_REPORT.yaml should contain a new release version in goral_version dropdown" 
-            exit 1 
+          if [ $? -ne 0 ]; then
+            echo "BUG_REPORT.yaml should contain a new release version in goral_version dropdown"
+            exit 1
           fi
 
           grep -q ${{ env.VERSION }} .github/site/src/download.sh
-          if [ $? -ne 0 ]; then 
-            echo "download.sh should contain a new release version" 
-            exit 1 
+          if [ $? -ne 0 ]; then
+            echo "download.sh should contain a new release version"
+            exit 1
           fi
 
           grep -q ${{ env.VERSION }} CHANGELOG.md
-          if [ $? -ne 0 ]; then 
-            echo "CHANGELOG.md should contain a new release version" 
-            exit 1 
+          if [ $? -ne 0 ]; then
+            echo "CHANGELOG.md should contain a new release version"
+            exit 1
           fi
 
           grep -q ${{ env.VERSION }} .github/site/src/installation.md
-          if [ $? -ne 0 ]; then 
-            echo "installation.md should contain a new release version" 
-            exit 1 
+          if [ $? -ne 0 ]; then
+            echo "installation.md should contain a new release version"
+            exit 1
           fi
 
       - name: Check fmt
@@ -90,7 +90,7 @@ jobs:
       - name: Install audit
         shell: bash
         run: |
-          cargo install cargo-deny 
+          cargo install cargo-deny
 
       - name: Security audit, licenses
         shell: bash
@@ -123,7 +123,7 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
@@ -131,7 +131,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          
+
           if echo "${GITHUB_REF#refs/tags/}" | grep -q "rc"; then
             echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
             echo "PRERELEASE=true" >> $GITHUB_ENV
@@ -139,10 +139,10 @@ jobs:
             echo "VERSION=$(awk -F '"' '/^version =/ {print $2}' Cargo.toml)" >> $GITHUB_ENV
             echo "PRERELEASE=false" >> $GITHUB_ENV
           else
-            echo "no release version is found" 
-            exit 1 
+            echo "no release version is found"
+            exit 1
           fi
-  
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -171,7 +171,7 @@ jobs:
           else
             binary_name="goral"
           fi
-      
+
           dirname="$binary_name-${{ env.VERSION }}-${{ matrix.target }}"
           mkdir "$dirname"
           mv "target/${{ matrix.target }}/release/$binary_name" "$dirname"
@@ -185,7 +185,7 @@ jobs:
           echo "ASSET=$dirname.tar.gz" >> $GITHUB_ENV
 
       - name: Save Release URL File for publish
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ASSET }}
           path: ${{ env.ASSET }}
@@ -202,7 +202,7 @@ jobs:
 
     steps:
       - name: Clone repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
@@ -210,7 +210,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          
+
           if echo "${GITHUB_REF#refs/tags/}" | grep -q "rc"; then
             echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
             echo "PRERELEASE=true" >> $GITHUB_ENV
@@ -218,12 +218,12 @@ jobs:
             echo "VERSION=$(awk -F '"' '/^version =/ {print $2}' Cargo.toml)" >> $GITHUB_ENV
             echo "PRERELEASE=false" >> $GITHUB_ENV
           else
-            echo "no release version is found" 
-            exit 1 
+            echo "no release version is found"
+            exit 1
           fi
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: ./artifacts
           merge-multiple: true
@@ -236,15 +236,16 @@ jobs:
           else
             echo "$(grep -A10000 ${{ env.VERSION }} CHANGELOG.md | grep -B10000 -m2 -P "[0-9]+\.[0-9]+\.[0-9]+" CHANGELOG.md | grep "\S" | grep -v -E "[0-9]+\.[0-9]+\.[0-9]+")" > ${{ env.VERSION }}-CHANGELOG.txt
             echo '' >> ${{ env.VERSION }}-CHANGELOG.txt
-            echo -E 'To update `curl --proto '=https' --tlsv1.2 -sSf https://maksimryndin.github.io/goral/download.sh | sh`' >> ${{ env.VERSION }}-CHANGELOG.txt
+            echo -E 'To update `curl --proto '=https' --tlsv1.2 -sSf https://semplico.github.io/goral/download.sh | sh`' >> ${{ env.VERSION }}-CHANGELOG.txt
           fi
 
-      - name: Release
-        uses: softprops/action-gh-release@v2
+      - name: Create Draft Release and Upload Assets
+        uses: softprops/action-gh-release@v3
         with:
           body_path: ${{ env.VERSION }}-CHANGELOG.txt
-          prerelease: ${{ env.PRERELEASE }}
-          make_latest: "true"
+          prerelease: ${{ env.PRERELEASE == 'true' }}
           tag_name: ${{ env.VERSION }}
+          make_latest: ${{ env.PRERELEASE == 'false' }}
+          draft: true
           files: |
             ./artifacts/*

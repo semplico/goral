@@ -213,7 +213,7 @@ impl AppendableLog {
             if usage > 0.8 * limit && !self.truncate_warning_is_sent {
                 let url = self.base_url();
                 let message = format!(
-                    "current [spreadsheet]({url}) usage `{usage:.2}%` for service `{}` is approaching a limit `{limit:.2}%`, the data will be truncated, copy it if needed or consider using a separate spreadsheet for this service with a higher [storage quota](https://maksimryndin.github.io/goral/services.html#storage-quota)",
+                    "current [spreadsheet]({url}) usage `{usage:.2}%` for service `{}` is approaching a limit `{limit:.2}%`, the data will be truncated, copy it if needed or consider using a separate spreadsheet for this service with a higher [storage quota](https://semplico.github.io/goral/services.html#storage-quota)",
                     self.service
                 );
                 tracing::warn!("{}", message);

@@ -1,8 +1,6 @@
 name: "Goral bug report"
 description: You encountered a problem using Goral
 labels: ["bug"]
-assignees:
-  - maksimryndin
 body:
   - type: markdown
     attributes:
@@ -17,9 +15,9 @@ body:
       options:
         - label: "This issue is a bug report. For a feature request or other question feel free to use a blank issue."
           required: true
-        - label: "I've updated Goral to the latest semver-compatible version: https://github.com/maksimryndin/goral/releases and the bug still exists"
+        - label: "I've updated Goral to the latest semver-compatible version: https://github.com/semplico/goral/releases and the bug still exists"
           required: true
-        - label: "I've searched existing issues https://github.com/maksimryndin/goral/issues for the same bug and there is nothing similar"
+        - label: "I've searched existing issues https://github.com/semplico/goral/issues for the same bug and there is nothing similar"
           required: true
   - type: textarea
     attributes:
@@ -82,8 +80,8 @@ body:
       label: Which version of Goral do you run (`goral --version`)?
       multiple: false
       options:
+        - 0.1.17
         - 0.1.16
         - 0.1.15
         - 0.1.14
         - 0.1.13
-        - 0.1.12

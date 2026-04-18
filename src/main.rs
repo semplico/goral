@@ -41,7 +41,7 @@ pub async fn sigterm() -> tokio::io::Result<()> {
 /// Any Goral service is easily replaced with enterprise-grade
 /// solution like Prometheus, Loki or Zabbix because it scrapes
 /// data in common industry formats.
-/// https://github.com/maksimryndin/goral#goral
+/// https://github.com/semplico/goral#goral
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -200,7 +200,7 @@ async fn start() -> Result<(), String> {
 async fn main() -> Result<(), String> {
     panic::set_hook(Box::new(|panic_info| {
         let base_message = format!(
-            "\nCould you please open an issue https://github.com/maksimryndin/goral/issues with `Bug` label? Thank you for using {APP_NAME}!"
+            "\nCould you please open an issue https://github.com/semplico/goral/issues with `Bug` label? Thank you for using {APP_NAME}!"
         );
         if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
             if s.starts_with("assert:") {
