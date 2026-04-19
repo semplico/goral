@@ -1,6 +1,6 @@
 [package]
 name = "goral"
-version = "0.1.17"
+version = "0.1.18"
 edition = "2024"
 author = "Maksim Ryndin"
 license = "Apache-2.0"
@@ -44,7 +44,7 @@ serde = { version = "^1.0", default-features = false}
 serde_derive = { version = "^1.0", default-features = false}
 serde_json = { version = "^1.0", default-features = false}
 serde_valid = { version = "2.0", default-features = false, features = ["toml"] }
-sysinfo = { version = "0.38", default-features = false, features = ["system", "network", "user", "disk"]  }
+sysinfo = { version = "0.35", default-features = false, features = ["system", "network", "user", "disk"]  }
 tokio = { version = "^1.52", default-features = false, features = ["sync", "signal", "io-std", "process", "net"] }
 tonic = { version = "^0.14", default-features = false, features = ["router", "transport", "codegen"]}
 tonic-health = { version = "0.14", default-features = false}
