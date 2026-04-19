@@ -1,6 +1,5 @@
 [book]
 authors = ["Maksim Ryndin"]
 language = "en"
-multilingual = false
 src = "src"
 title = "Goral"
