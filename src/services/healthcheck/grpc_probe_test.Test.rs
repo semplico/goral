@@ -128,7 +128,7 @@ pub mod test_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = callSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
+                        let codec = tonic_prost::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
                                 accept_compression_encodings,

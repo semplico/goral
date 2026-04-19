@@ -379,6 +379,7 @@ impl Table {
                                 end_column_index: Some(i32::from(column_index) + 1),
                                 ..Default::default()
                             }),
+                            filtered_rows_included: None,
                         }),
                         ..Default::default()
                     });
@@ -460,6 +461,7 @@ impl Table {
                         ),
                         sheet_id: Some(self.id),
                         rows: Some(rows_to_add),
+                        table_id: None,
                     }),
                     ..Default::default()
                 });

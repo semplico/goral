@@ -1,3 +1,6 @@
+* 0.1.18
+    * update dependencies
+
 * 0.1.17
     * transfer the repository to @semplico github org
 
