@@ -762,7 +762,7 @@ mod tests {
                     .route_name("call")
                     .input_type("crate::services::healthcheck::tests::Input")
                     .output_type("crate::services::healthcheck::tests::Output")
-                    .codec_path("tonic_prost::codec::ProstCodec")
+                    .codec_path("tonic_prost::ProstCodec")
                     .build(),
             )
             .build();
@@ -775,51 +775,51 @@ mod tests {
             .build_client(false)
             .compile(&[service]);
 
-        // mod pb {
-        //     include!(concat!(
-        //         env!("CARGO_MANIFEST_DIR"),
-        //         "/src/services/healthcheck/grpc_probe_test.Test.rs"
-        //     ));
-        // }
+        mod pb {
+            include!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/src/services/healthcheck/grpc_probe_test.Test.rs"
+            ));
+        }
 
-        // #[derive(Default)]
-        // pub struct GrpcService {}
+        #[derive(Default)]
+        pub struct GrpcService {}
 
-        // #[tonic::async_trait]
-        // impl pb::test_server::Test for GrpcService {
-        //     async fn call(&self, _request: Request<Input>) -> Result<Response<Output>, Status> {
-        //         let reply = Output {};
-        //         Ok(Response::new(reply))
-        //     }
-        // }
+        #[tonic::async_trait]
+        impl pb::test_server::Test for GrpcService {
+            async fn call(&self, _request: Request<Input>) -> Result<Response<Output>, Status> {
+                let reply = Output {};
+                Ok(Response::new(reply))
+            }
+        }
 
-        // tokio::spawn(async {
-        //     let (health_reporter, health_service) = tonic_health::server::health_reporter();
+        tokio::spawn(async {
+            let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
-        //     health_reporter
-        //         .set_serving::<pb::test_server::TestServer<GrpcService>>()
-        //         .await;
-        //     let addr = "[::1]:53258".parse().unwrap();
-        //     let service = GrpcService::default();
+            health_reporter
+                .set_serving::<pb::test_server::TestServer<GrpcService>>()
+                .await;
+            let addr = "[::1]:53258".parse().unwrap();
+            let service = GrpcService::default();
 
-        //     println!("HealthServer + TestServer listening on {addr}");
+            println!("HealthServer + TestServer listening on {addr}");
 
-        //     Server::builder()
-        //         .add_service(health_service)
-        //         .add_service(pb::test_server::TestServer::new(service))
-        //         .serve(addr)
-        //         .await
-        //         .expect("test assert: able to run grpc service");
-        // });
+            Server::builder()
+                .add_service(health_service)
+                .add_service(pb::test_server::TestServer::new(service))
+                .serve(addr)
+                .await
+                .expect("test assert: able to run grpc service");
+        });
 
-        // tokio::time::sleep(Duration::from_millis(50)).await;
-        // let liveness = Liveness {
-        //     name: None,
-        //     initial_delay: Duration::from_millis(0),
-        //     period: Duration::from_secs(1),
-        //     timeout: Duration::from_millis(50),
-        //     probe: Probe::Grpc(Endpoint::from_static("http://[::1]:53258")),
-        // };
-        // HealthcheckService::is_alive(&liveness).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let liveness = Liveness {
+            name: None,
+            initial_delay: Duration::from_millis(0),
+            period: Duration::from_secs(1),
+            timeout: Duration::from_millis(50),
+            probe: Probe::Grpc(Endpoint::from_static("http://[::1]:53258")),
+        };
+        HealthcheckService::is_alive(&liveness).await.unwrap();
     }
 }
