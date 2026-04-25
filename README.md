@@ -2,7 +2,7 @@
 
 > Save your time with Goral to setup the whole observability/monitoring stack when you start
 
-Observability toolkit for small projects. Easy-to-use and compatible with industry standards.
+A lean observability toolkit. Easy-to-use and compatible with industry standards.
 
 ```sh
 curl --proto '=https' --tlsv1.2 -sSf https://semplico.github.io/goral/download.sh | sh
@@ -12,7 +12,7 @@ Also check out [setup](https://semplico.github.io/goral/setup.html) and [recomme
 
 ## Overview
 
-Goral is a simple observability daemon developed with the following idea in mind: when you have your favorite application in its infantry, you usually don't need a full-blown observability toolkit (which requires much more setup, maintenance and resources) around as the amount of data is not so huge. It is especially true for pet projects when you just want to test an idea and deploy the app at some free-tier commodity VPS.
+Goral is a lean observability daemon developed with the following idea in mind: most applications have small to moderate number of users so a full-blown observability toolkit (which requires much more setup, maintenance and resources) is not required as the amount of data is small.
 
 So Goral provides the following features being deployed next to your app(s):
 * [Periodic healthchecks](https://semplico.github.io/goral/healthcheck.html) (aka [liveness probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/))
@@ -23,8 +23,8 @@ So Goral provides the following features being deployed next to your app(s):
 * Features are modular - all [services](https://semplico.github.io/goral/services.html) are switched on/off in the configuration.
 * You can observe several instances of the same app or different apps on the same host with a single Goral daemon (except logs as logs are collected via stdin of Goral - see [Logs](https://semplico.github.io/goral/logs.html))
 * You can configure different messengers and/or channels for every [service](https://semplico.github.io/goral/services.html) to get notifications on errors, liveness updates, system resources overlimit etc
-* All the data collected is stored in Google Sheet with an automatic quota and limits checks and automatic data rotation - old data is deleted with a preliminary notification via configured messenger. That way you don't have to buy a separate storage or overload your app VPS with Prometheus, ELK etc. Just a lean process next to your brilliant one which just sends app data in batches to Google Sheets for your ease of use. Google Sheets allow you to build your own diagrams over the metrics and analyse them, analyse liveness statistics and calculate uptime etc.
-* You can configure different spreadsheets and messengers for every service
+* All the data collected is stored in Google Sheets with an automatic quota and limits checks and automatic data rotation - old data is deleted with a preliminary notification via configured messenger. That way you don't have to buy a separate storage or overload your app VPS with Prometheus, ELK etc. Google Sheets allow you to build your own diagrams over the metrics and analyse them, analyse liveness statistics and calculate uptime etc.
+* You can configure different spreadsheets and messengers for every service.
 * You can configure [rules](https://semplico.github.io/goral/rules.html) for notifications by messengers for any data.
 
 ## Licence

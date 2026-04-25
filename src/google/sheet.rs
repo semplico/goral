@@ -170,7 +170,7 @@ pub(super) fn prepare_sheet_title(
 pub mod tests {
     use super::*;
     use google_sheets4::api::{GridProperties, Sheet as GoogleSheet, SheetProperties};
-    use rand::{Rng, distr::Alphanumeric};
+    use rand::{RngExt, distr::Alphanumeric};
     use std::collections::HashMap;
     use std::collections::HashSet;
 
@@ -227,6 +227,7 @@ pub mod tests {
             protected_ranges: None,
             row_groups: None,
             slicers: None,
+            tables: None,
         }
     }
 
@@ -245,6 +246,7 @@ pub mod tests {
             protected_ranges: None,
             row_groups: None,
             slicers: None,
+            tables: None,
         }
     }
 

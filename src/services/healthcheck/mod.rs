@@ -762,7 +762,7 @@ mod tests {
                     .route_name("call")
                     .input_type("crate::services::healthcheck::tests::Input")
                     .output_type("crate::services::healthcheck::tests::Output")
-                    .codec_path("tonic::codec::ProstCodec")
+                    .codec_path("tonic_prost::ProstCodec")
                     .build(),
             )
             .build();
