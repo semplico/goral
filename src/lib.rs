@@ -5,6 +5,7 @@
 #![deny(clippy::cast_precision_loss)]
 #![deny(clippy::cast_sign_loss)]
 pub mod configuration;
+pub mod diagnostics;
 pub mod google;
 pub mod http;
 pub mod messenger;
@@ -199,6 +200,7 @@ pub fn collect_services(
 pub struct Shared {
     pub messenger: Option<Arc<BoxedMessenger>>,
     pub send_notification: notifications::Sender,
+    pub diagnostics: Arc<diagnostics::Diagnostics>,
 }
 
 impl Shared {
@@ -206,6 +208,7 @@ impl Shared {
         Self {
             messenger: None,
             send_notification,
+            diagnostics: Arc::new(diagnostics::Diagnostics::new()),
         }
     }
 

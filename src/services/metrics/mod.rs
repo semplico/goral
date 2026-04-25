@@ -227,6 +227,8 @@ impl MetricsService {
         scrape_target: ScrapeTarget,
         sender: mpsc::Sender<TaskResult>,
         send_notification: Sender,
+        diagnostics: Arc<crate::diagnostics::Diagnostics>,
+        queue_capacity: usize,
     ) {
         let mut interval = tokio::time::interval(scrape_target.interval);
         tracing::info!("starting metrics scraping for {:?}", scrape_target.url);
@@ -262,7 +264,17 @@ impl MetricsService {
 
                     match sender.try_send(TaskResult{id: scrape_target.index, result}) {
                         Err(TrySendError::Full(res)) => {
-                            let msg = "scrape messages queue is full so increase scrape interval and decrease push interval".to_string();
+                            let stats = diagnostics.append_snapshot(METRICS_SERVICE_NAME);
+                            let msg = format!(
+                                "QUEUE_FULL service={} queue=results queue_cap={} google_in_flight={} append_seq={} last_append_ms={} last_append_rows={} pending_rows_before_append={}",
+                                METRICS_SERVICE_NAME,
+                                queue_capacity,
+                                crate::google::spreadsheet::google_in_flight(),
+                                stats.append_seq,
+                                stats.last_append_ms,
+                                stats.last_append_rows,
+                                stats.pending_rows_before_append,
+                            );
                             tracing::error!("{}. Cannot send scrape target `{:?}` result `{:?}`", msg, scrape_target, res);
                             send_notification.try_error(msg);
                         },
@@ -343,6 +355,8 @@ impl Service for MetricsService {
         is_shutdown: Arc<AtomicBool>,
         sender: mpsc::Sender<TaskResult>,
     ) -> Vec<JoinHandle<()>> {
+        let diagnostics = self.shared.diagnostics.clone();
+        let queue_capacity = 2 * self.channel_capacity;
         self.targets
             .iter()
             .map(|t| {
@@ -351,6 +365,7 @@ impl Service for MetricsService {
                 let is_shutdown = is_shutdown.clone();
                 let client = HttpClient::lousy(MAX_BYTES_METRICS_OUTPUT, true, t.interval);
                 let send_notification = self.shared.send_notification.clone();
+                let diagnostics = diagnostics.clone();
                 tokio::spawn(async move {
                     Self::run_scrape(
                         is_shutdown,
@@ -358,6 +373,8 @@ impl Service for MetricsService {
                         scrape_target,
                         sender,
                         send_notification,
+                        diagnostics,
+                        queue_capacity,
                     )
                     .await;
                 })
@@ -397,7 +414,9 @@ mod tests {
             }
         });
 
+        let diagnostics = Arc::new(crate::diagnostics::Diagnostics::new());
         let is_shutdown_clone = is_shutdown.clone();
+        let diagnostics_clone = diagnostics.clone();
         let scrape_handle = tokio::spawn(async move {
             MetricsService::run_scrape(
                 is_shutdown_clone,
@@ -405,6 +424,8 @@ mod tests {
                 target,
                 data_sender,
                 send_notification,
+                diagnostics_clone,
+                NUM_OF_SCRAPES,
             )
             .await;
         });
@@ -456,7 +477,9 @@ mod tests {
             }
         });
 
+        let diagnostics = Arc::new(crate::diagnostics::Diagnostics::new());
         let is_shutdown_clone = is_shutdown.clone();
+        let diagnostics_clone = diagnostics.clone();
         let scrape_handle = tokio::spawn(async move {
             MetricsService::run_scrape(
                 is_shutdown_clone,
@@ -464,6 +487,8 @@ mod tests {
                 target,
                 data_sender,
                 send_notification,
+                diagnostics_clone,
+                NUM_OF_SCRAPES,
             )
             .await;
         });

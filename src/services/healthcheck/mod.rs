@@ -275,6 +275,8 @@ impl HealthcheckService {
         liveness: Liveness,
         sender: mpsc::Sender<TaskResult>,
         send_notification: Sender,
+        diagnostics: Arc<crate::diagnostics::Diagnostics>,
+        queue_capacity: usize,
     ) {
         tokio::time::sleep(liveness.initial_delay).await;
         let mut interval = tokio::time::interval(liveness.period);
@@ -292,7 +294,17 @@ impl HealthcheckService {
                         });
                     match sender.try_send(TaskResult{id: index, result}) {
                         Err(TrySendError::Full(res)) => {
-                            let msg = "health messages queue is full so increase scrape interval and decrease push interval".to_string();
+                            let stats = diagnostics.append_snapshot(HEALTHCHECK_SERVICE_NAME);
+                            let msg = format!(
+                                "QUEUE_FULL service={} queue=results queue_cap={} google_in_flight={} append_seq={} last_append_ms={} last_append_rows={} pending_rows_before_append={}",
+                                HEALTHCHECK_SERVICE_NAME,
+                                queue_capacity,
+                                crate::google::spreadsheet::google_in_flight(),
+                                stats.append_seq,
+                                stats.last_append_ms,
+                                stats.last_append_rows,
+                                stats.pending_rows_before_append,
+                            );
                             tracing::error!("{}. Cannot send liveness `{:?}` result `{:?}`", msg, liveness, res);
                             send_notification.try_error(msg);
                         },
@@ -419,6 +431,8 @@ impl Service for HealthcheckService {
         is_shutdown: Arc<AtomicBool>,
         sender: mpsc::Sender<TaskResult>,
     ) -> Vec<JoinHandle<()>> {
+        let diagnostics = self.shared.diagnostics.clone();
+        let queue_capacity = 2 * self.channel_capacity;
         self.liveness
             .iter()
             .enumerate()
@@ -427,8 +441,18 @@ impl Service for HealthcheckService {
                 let sender = sender.clone();
                 let is_shutdown = is_shutdown.clone();
                 let send_notification = self.shared.send_notification.clone();
+                let diagnostics = diagnostics.clone();
                 tokio::spawn(async move {
-                    Self::run_check(is_shutdown, i, liveness, sender, send_notification).await;
+                    Self::run_check(
+                        is_shutdown,
+                        i,
+                        liveness,
+                        sender,
+                        send_notification,
+                        diagnostics,
+                        queue_capacity,
+                    )
+                    .await;
                 })
             })
             .collect()
@@ -527,7 +551,9 @@ mod tests {
             }
         });
 
+        let diagnostics = Arc::new(crate::diagnostics::Diagnostics::new());
         let is_shutdown_clone = is_shutdown.clone();
+        let diagnostics_clone = diagnostics.clone();
         let checker_handle = tokio::spawn(async move {
             HealthcheckService::run_check(
                 is_shutdown_clone,
@@ -535,6 +561,8 @@ mod tests {
                 liveness,
                 data_sender,
                 send_notification,
+                diagnostics_clone,
+                NUM_OF_PROBES,
             )
             .await;
         });
@@ -586,7 +614,9 @@ mod tests {
         });
 
         tokio::time::sleep(Duration::from_secs(3)).await;
+        let diagnostics = Arc::new(crate::diagnostics::Diagnostics::new());
         let is_shutdown_clone = is_shutdown.clone();
+        let diagnostics_clone = diagnostics.clone();
         let checker_handle = tokio::spawn(async move {
             HealthcheckService::run_check(
                 is_shutdown_clone,
@@ -594,6 +624,8 @@ mod tests {
                 liveness,
                 data_sender,
                 send_notification,
+                diagnostics_clone,
+                NUM_OF_PROBES,
             )
             .await;
         });
@@ -665,6 +697,8 @@ mod tests {
         });
 
         let is_shutdown_clone = is_shutdown.clone();
+        let diagnostics = Arc::new(crate::diagnostics::Diagnostics::new());
+        let diagnostics_clone = diagnostics.clone();
         tokio::time::sleep(Duration::from_secs(3)).await;
         let checker_handle = tokio::spawn(async move {
             HealthcheckService::run_check(
@@ -673,6 +707,8 @@ mod tests {
                 liveness,
                 data_sender,
                 send_notification,
+                diagnostics_clone,
+                NUM_OF_PROBES,
             )
             .await;
         });

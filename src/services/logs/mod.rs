@@ -199,11 +199,14 @@ impl LogsService {
         send_notification: Sender,
         filter_if_contains: Vec<String>,
         drop_if_contains: Vec<String>,
+        diagnostics: Arc<crate::diagnostics::Diagnostics>,
+        results_queue_cap: usize,
     ) {
         tracing::info!("starting stdin logs scraping");
         let stdin = BufReader::new(io::stdin()).lines();
         tokio::pin!(stdin);
-        let (tx, rx) = mpsc::channel(sender.capacity());
+        let (tx, rx) = mpsc::channel(results_queue_cap);
+        let stdin_queue_cap = results_queue_cap;
         let cloned_sender = sender.clone();
         let cloned_is_shutdown = is_shutdown.clone();
         std::thread::Builder::new()
@@ -235,7 +238,17 @@ impl LogsService {
                         Ok(Some(line)) => {
                             match tx.try_send(line) {
                                 Err(TrySendError::Full(res)) => {
-                                    let msg = "log messages queue is full so decrease push interval and filter logs by substrings in `filter_if_contains`".to_string();
+                                    let stats = diagnostics.append_snapshot(LOGS_SERVICE_NAME);
+                                    let msg = format!(
+                                        "QUEUE_FULL service={} queue=stdin_line queue_cap={} google_in_flight={} append_seq={} last_append_ms={} last_append_rows={} pending_rows_before_append={}",
+                                        LOGS_SERVICE_NAME,
+                                        stdin_queue_cap,
+                                        crate::google::spreadsheet::google_in_flight(),
+                                        stats.append_seq,
+                                        stats.last_append_ms,
+                                        stats.last_append_rows,
+                                        stats.pending_rows_before_append,
+                                    );
                                     tracing::error!("{}. Cannot send log result `{:?}`", msg, res);
                                     send_notification.try_error(msg);
                                 },
@@ -356,6 +369,8 @@ impl Service for LogsService {
         let send_notification = self.shared.send_notification.clone();
         let filter_if_contains = self.filter_if_contains.clone();
         let drop_if_contains = self.drop_if_contains.clone();
+        let diagnostics = self.shared.diagnostics.clone();
+        let results_queue_cap = 2 * self.channel_capacity;
         vec![tokio::spawn(async move {
             Self::logs_collector(
                 is_shutdown,
@@ -363,6 +378,8 @@ impl Service for LogsService {
                 send_notification,
                 filter_if_contains,
                 drop_if_contains,
+                diagnostics,
+                results_queue_cap,
             )
             .await;
         })]

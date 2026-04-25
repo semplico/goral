@@ -19,9 +19,31 @@ use google_sheets4::{
     yup_oauth2::authenticator::Authenticator,
 };
 use serde_json::Value;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 #[cfg(test)]
 use crate::google::spreadsheet::tests::TestState;
+
+static GOOGLE_IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
+
+pub fn google_in_flight() -> usize {
+    GOOGLE_IN_FLIGHT.load(Ordering::Relaxed)
+}
+
+struct GoogleInFlightGuard;
+
+impl GoogleInFlightGuard {
+    fn new() -> Self {
+        GOOGLE_IN_FLIGHT.fetch_add(1, Ordering::Relaxed);
+        Self
+    }
+}
+
+impl Drop for GoogleInFlightGuard {
+    fn drop(&mut self) {
+        GOOGLE_IN_FLIGHT.fetch_sub(1, Ordering::Relaxed);
+    }
+}
 
 // https://support.google.com/docs/thread/181288162/whats-the-maximum-amount-of-rows-in-google-sheets?hl=en
 pub const GOOGLE_SPREADSHEET_MAXIMUM_CELLS: u32 = 10_000_000;
@@ -197,6 +219,7 @@ impl SpreadsheetAPI {
         spreadsheet_id: &str,
         sheet_id: TableId,
     ) -> Result<Vec<Vec<Value>>, StorageError> {
+        let _guard = GoogleInFlightGuard::new();
         let req = BatchGetValuesByDataFilterRequest {
             data_filters: Some(vec![DataFilter {
                 grid_range: Some(GridRange {
@@ -238,6 +261,7 @@ impl SpreadsheetAPI {
         spreadsheet_id: &str,
         sheet_id: TableId,
     ) -> Result<Vec<Vec<Value>>, StorageError> {
+        let _guard = GoogleInFlightGuard::new();
         let mut state = self.state.lock().await;
         state.get_sheet_data(spreadsheet_id, sheet_id).await
     }
@@ -300,6 +324,7 @@ impl SpreadsheetAPI {
         host: &str,
         service: &str,
     ) -> Result<Vec<Table>, StorageError> {
+        let _guard = GoogleInFlightGuard::new();
         let result = self.get(spreadsheet_id, host, service).await;
 
         tracing::trace!("{:?}", result);
@@ -346,6 +371,7 @@ impl SpreadsheetAPI {
         spreadsheet_id: &str,
         requests: Vec<Request>,
     ) -> Result<(), StorageError> {
+        let _guard = GoogleInFlightGuard::new();
         self._crud_sheets(spreadsheet_id, requests)
             .await
             .map_err(|e| {

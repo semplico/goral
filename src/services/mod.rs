@@ -18,11 +18,43 @@ use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
 };
-use std::time::Duration;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::{self, error::TrySendError};
 use tokio::task::JoinHandle;
 use tracing::Level;
+
+async fn append_with_diagnostics(
+    shared: &Shared,
+    service: &'static str,
+    append_seq: &mut u64,
+    pending_rows_before_append: u32,
+    log: &mut AppendableLog,
+) -> Result<(), crate::google::StorageError> {
+    let append_start = Instant::now();
+    *append_seq = append_seq.saturating_add(1);
+    let res = log.append().await;
+    let append_ms: u64 = append_start
+        .elapsed()
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX);
+    let finished_ts_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis().try_into().unwrap_or(u64::MAX))
+        .unwrap_or(0);
+    shared.diagnostics.update_append(
+        service,
+        crate::diagnostics::AppendStatsSnapshot {
+            append_seq: *append_seq,
+            last_append_ms: append_ms,
+            last_append_rows: pending_rows_before_append,
+            pending_rows_before_append,
+            last_append_finished_ts_ms: finished_ts_ms,
+        },
+    );
+    res
+}
 
 #[derive(Debug, Clone)]
 pub enum Data {
@@ -472,6 +504,8 @@ pub trait Service: Send + Sync {
 
     async fn run(&mut self, mut log: AppendableLog, mut shutdown: broadcast::Receiver<u16>) {
         self.prerun_hook(&mut log).await;
+        let service_name = self.name();
+        let mut append_seq: u64 = 0;
         //  channel to collect results
         let (tx, mut data_receiver) = mpsc::channel(2 * self.channel_capacity());
         let is_shutdown = Arc::new(AtomicBool::new(false));
@@ -539,7 +573,15 @@ pub trait Service: Send + Sync {
                                 self.plan_to_append(&mut log, &mut data);
                                 self.send_for_rule_processing(data, &mut rules_input).await;
                             }
-                            let _ = log.append().await;
+                            let pending_rows_before_append = log.new_rows();
+                            let _ = append_with_diagnostics(
+                                self.shared(),
+                                service_name,
+                                &mut append_seq,
+                                pending_rows_before_append,
+                                &mut log,
+                            )
+                            .await;
                         } => {
                             tracing::info!("{} service has successfully shutdowned", self.name());
                         }
@@ -559,7 +601,14 @@ pub trait Service: Send + Sync {
                         rows_count,
                         self.name()
                     );
-                    if let Err(e) = log.append().await {
+                    if let Err(e) = append_with_diagnostics(
+                        self.shared(),
+                        service_name,
+                        &mut append_seq,
+                        rows_count,
+                        &mut log,
+                    )
+                    .await {
                         let msg = format!("`{e}` for service `{}`, failed to append {rows_count} rows", self.name());
                         tracing::error!("{}", msg);
                         if let Some(messenger_config) = &self.messenger_config() && messenger_config.send_google_append_error {
@@ -724,6 +773,7 @@ mod tests {
         let shared = Shared {
             messenger: None,
             send_notification: tx.clone(),
+            diagnostics: Arc::new(crate::diagnostics::Diagnostics::new()),
         };
         let mut service = TestService { counter, shared };
         let log = AppendableLog::new(
