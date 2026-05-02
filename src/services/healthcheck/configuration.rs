@@ -81,8 +81,9 @@ pub(super) fn scrape_push_rule(
         }
     }
 
-    // We can wait for the previous request to finish during MAX_GOOGLE_REQUEST_DURATION_SECS
-    let number_of_rows_in_batch = liveness.iter().fold(0, |acc, l| {
+    // We can wait for the previous request to finish during MAX_GOOGLE_REQUEST_DURATION_SECS.
+    // This bounds how much data is accumulated before saving to a spreadsheet.
+    let number_of_rows_in_batch: u16 = liveness.iter().fold(0, |acc, l| {
         acc + ceiled_division(
             MAX_GOOGLE_REQUEST_DURATION_SECS.max(*push_interval_secs),
             l.period_secs,
@@ -96,7 +97,26 @@ pub(super) fn scrape_push_rule(
             "push interval ({push_interval_secs}) is too big (if more than {MAX_GOOGLE_REQUEST_DURATION_SECS}s) for current choices of liveness periods or liveness periods are too small - too much data ({number_of_rows_in_batch} rows vs limit of {LIMIT}) would be accumulated before saving to a spreadsheet"
         )));
     }
-    Ok(number_of_rows_in_batch.into())
+
+    // Appending to Google Sheets blocks the service loop. While blocked, health probes continue to
+    // produce results and enqueue them into the bounded channel. Size the channel for a
+    // conservative "blocked window" rather than only for `push_interval_secs`.
+    //
+    // Heuristics:
+    // - Google API backoff/retry can occupy up to `MAX_GOOGLE_REQUEST_DURATION_SECS` (or longer if
+    //   multiple services contend). Use 2x as a conservative budget for multi-service contention.
+    // - Appending rows is time-consuming; estimate ~1s per row (consistent with other services).
+    let estimated_append_secs: u16 = number_of_rows_in_batch;
+    let google_block_budget_secs: u16 =
+        2 * MAX_GOOGLE_REQUEST_DURATION_SECS.max(*push_interval_secs);
+    let block_window_secs: u16 = google_block_budget_secs.saturating_add(estimated_append_secs);
+
+    let queued_rows: usize = liveness
+        .iter()
+        .map(|l| usize::from(ceiled_division(block_window_secs, l.period_secs)))
+        .sum();
+
+    Ok(queued_rows)
 }
 
 fn liveness_period_secs() -> u16 {
